@@ -68,4 +68,4 @@ A change is complete when typecheck, lint, and tests pass AND behavior changes c
 
 ## Current focus
 
-`docs/specs/stage-1-mvp.md`. Read it before writing any code.
+`docs/specs/stage-1.md`. Read it before writing any code.
