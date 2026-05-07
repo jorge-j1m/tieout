@@ -1,12 +1,17 @@
 {
-  "name": "turbo",
+  "name": "tieout",
   "private": true,
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "check-types": "turbo run check-types"
+    "db:generate": "pnpm --filter @tieout/db db:generate",
+    "db:migrate": "pnpm --filter @tieout/db db:migrate",
+    "seed": "pnpm --filter @tieout/seed seed",
+    "recon": "pnpm --filter @tieout/jobs recon"
   },
   "devDependencies": {
     "prettier": "^3.7.4",
@@ -15,6 +20,6 @@
   },
   "packageManager": "pnpm@9.0.0",
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   }
 }

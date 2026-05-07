@@ -1,0 +1,6 @@
+{
+  "name": "@tieout/api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Hono domain API. Stage 3 — intentionally empty until its spec is active."
+}

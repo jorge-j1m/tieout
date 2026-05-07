@@ -1,0 +1,34 @@
+{
+  "name": "@tieout/jobs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "trigger.dev dev",
+    "deploy": "trigger.dev deploy",
+    "recon": "tsx src/cli/recon.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tieout/adapters": "workspace:*",
+    "@tieout/contracts": "workspace:*",
+    "@tieout/core": "workspace:*",
+    "@tieout/db": "workspace:*",
+    "@tieout/seed": "workspace:*",
+    "@trigger.dev/sdk": "^4.0.0",
+    "dotenv": "^16.4.0",
+    "drizzle-orm": "^0.44.0"
+  },
+  "devDependencies": {
+    "@tieout/eslint-config": "workspace:*",
+    "@tieout/typescript-config": "workspace:*",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.39.1",
+    "trigger.dev": "^4.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "5.9.2",
+    "vitest": "^3.0.0"
+  }
+}
