@@ -42,7 +42,7 @@ Dense by design. One entry per decision, with why. If a decision changes, edit t
 
 **D16 — Pure core, zero I/O.** Matching, money math, classification live in `packages/core` as pure functions. Property tests (fast-check) enforce invariants: no transaction in two matches; matched sums preserved; identical inputs → identical results. Adapters get golden-file tests (real sample payloads → expected normalized output, committed to the repo).
 
-**D17 — Match results reference transaction id + version** plus the `ruleset_version` that produced them. Supersession of a matched transaction emits an outbox event → match re-evaluation (may reopen a break). No dual writes; the outbox is the only event mechanism.
+**D17 — Match results reference transaction id + version** plus the `ruleset_version` that produced them. `match_members` also carries `run_id` so Postgres itself forbids one transaction in two matches within a run. Supersession of a matched transaction emits an outbox event → match re-evaluation (may reopen a break). No dual writes; the outbox is the only event mechanism. (Outbox arrives Stage 2; Stage 1 records versions only.)
 
 **D18 — Breaks are typed** (missing_in_source, amount_mismatch, duplicate, unexpected_fee, fx_drift, ...) and flow into `exceptions` with an append-only `exception_events` history.
 
