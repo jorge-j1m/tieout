@@ -1,0 +1,85 @@
+[
+  {
+    "entryId": "LED-D-0001",
+    "account": "mercadia:operating",
+    "amount": "10.00",
+    "currency": "USD",
+    "bookedAt": "2026-05-03T09:15:00.000Z",
+    "valueDate": "2026-05-03",
+    "type": "wire_in",
+    "status": "posted",
+    "reference": null,
+    "description": "Unmapped native type"
+  },
+  {
+    "entryId": "LED-D-0002",
+    "account": "mercadia:operating",
+    "amount": "12.3.4",
+    "currency": "USD",
+    "bookedAt": "2026-05-03T09:16:00.000Z",
+    "valueDate": "2026-05-03",
+    "type": "payment",
+    "status": "posted",
+    "reference": null,
+    "description": "Malformed amount"
+  },
+  {
+    "entryId": "LED-D-0003",
+    "account": "mercadia:operating",
+    "amount": "10.555",
+    "currency": "USD",
+    "bookedAt": "2026-05-03T09:17:00.000Z",
+    "valueDate": "2026-05-03",
+    "type": "payment",
+    "status": "posted",
+    "reference": null,
+    "description": "More precision than USD carries"
+  },
+  {
+    "entryId": "LED-D-0004",
+    "account": "mercadia:operating",
+    "amount": "10.00",
+    "currency": "DOGE",
+    "bookedAt": "2026-05-03T09:18:00.000Z",
+    "valueDate": "2026-05-03",
+    "type": "payment",
+    "status": "posted",
+    "reference": null,
+    "description": "Unknown currency"
+  },
+  {
+    "entryId": "LED-D-0005",
+    "account": "mercadia:operating",
+    "amount": "10.00",
+    "currency": "USD",
+    "bookedAt": "2026-05-03T11:15:00+02:00",
+    "valueDate": "2026-05-03",
+    "type": "payment",
+    "status": "posted",
+    "reference": null,
+    "description": "Source-local timestamp — the ledger contract is UTC"
+  },
+  {
+    "account": "mercadia:operating",
+    "amount": "33.00",
+    "currency": "USD",
+    "bookedAt": "2026-05-03T09:20:00.000Z",
+    "valueDate": "2026-05-03",
+    "type": "payment",
+    "status": "posted",
+    "reference": null,
+    "description": "Missing entryId — lands under a synthetic id, quarantines at normalize"
+  },
+  {
+    "entryId": "LED-D-0007",
+    "account": "mercadia:operating",
+    "amount": 12.5,
+    "currency": "USD",
+    "bookedAt": "2026-05-03T09:21:00.000Z",
+    "valueDate": "2026-05-03",
+    "type": "payment",
+    "status": "posted",
+    "reference": null,
+    "description": "Amount as a JSON float — floats never touch money"
+  }
+]

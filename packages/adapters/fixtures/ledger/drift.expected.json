@@ -1,0 +1,86 @@
+[
+  {
+    "sourceId": "LED-D-0001",
+    "result": {
+      "ok": false,
+      "errors": [
+        {
+          "path": "type",
+          "message": "unmapped ledger type: wire_in"
+        }
+      ]
+    }
+  },
+  {
+    "sourceId": "LED-D-0002",
+    "result": {
+      "ok": false,
+      "errors": [
+        {
+          "path": "amount",
+          "message": "malformed dot-format amount: \"12.3.4\""
+        }
+      ]
+    }
+  },
+  {
+    "sourceId": "LED-D-0003",
+    "result": {
+      "ok": false,
+      "errors": [
+        {
+          "path": "amount",
+          "message": "amount \"10.555\" has 3 fraction digits; USD carries 2"
+        }
+      ]
+    }
+  },
+  {
+    "sourceId": "LED-D-0004",
+    "result": {
+      "ok": false,
+      "errors": [
+        {
+          "path": "currency",
+          "message": "unknown currency: DOGE"
+        }
+      ]
+    }
+  },
+  {
+    "sourceId": "LED-D-0005",
+    "result": {
+      "ok": false,
+      "errors": [
+        {
+          "path": "bookedAt",
+          "message": "Invalid ISO datetime"
+        }
+      ]
+    }
+  },
+  {
+    "sourceId": "syn_9f0f594befe34e03219b8b3c0c344422",
+    "result": {
+      "ok": false,
+      "errors": [
+        {
+          "path": "entryId",
+          "message": "Invalid input: expected string, received undefined"
+        }
+      ]
+    }
+  },
+  {
+    "sourceId": "LED-D-0007",
+    "result": {
+      "ok": false,
+      "errors": [
+        {
+          "path": "amount",
+          "message": "Invalid input: expected string, received number"
+        }
+      ]
+    }
+  }
+]

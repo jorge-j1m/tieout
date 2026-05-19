@@ -1,0 +1,62 @@
+[
+  {
+    "entryId": "LED-T-0001",
+    "account": "mercadia:operating",
+    "amount": "67.37",
+    "currency": "USD",
+    "bookedAt": "2026-05-03T09:15:00.000Z",
+    "valueDate": "2026-05-03",
+    "type": "payment",
+    "status": "posted",
+    "reference": "ch_test_0001",
+    "description": "Customer payment — order #9001"
+  },
+  {
+    "entryId": "LED-T-R001",
+    "account": "mercadia:operating",
+    "amount": "-15.00",
+    "currency": "USD",
+    "bookedAt": "2026-05-05T14:00:00.000Z",
+    "valueDate": "2026-05-05",
+    "type": "refund",
+    "status": "posted",
+    "reference": "re_test_0001",
+    "description": "Refund — order #9001"
+  },
+  {
+    "entryId": "LED-T-0002",
+    "account": "mercadia:operating",
+    "amount": "120.00",
+    "currency": "USD",
+    "bookedAt": "2026-05-06T08:30:00.000Z",
+    "valueDate": "2026-05-06",
+    "type": "payment",
+    "status": "pending",
+    "reference": null,
+    "description": "Manual journal — wholesale order"
+  },
+  {
+    "entryId": "LED-T-0003",
+    "account": "mercadia:operating-jp",
+    "amount": "5400",
+    "currency": "JPY",
+    "bookedAt": "2026-05-07T01:00:00.000Z",
+    "valueDate": "2026-05-07",
+    "type": "payment",
+    "status": "posted",
+    "reference": "ch_test_0002",
+    "description": "Customer payment — JP storefront"
+  },
+  {
+    "entryId": "LED-T-0004",
+    "account": "mercadia:operating",
+    "amount": "42.00",
+    "currency": "USD",
+    "bookedAt": "2026-05-08T10:00:00.000Z",
+    "valueDate": "2026-05-08",
+    "type": "payment",
+    "status": "void",
+    "reference": "ch_test_0003",
+    "description": "Voided posting"
+  }
+]

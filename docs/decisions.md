@@ -57,3 +57,5 @@ Dense by design. One entry per decision, with why. If a decision changes, edit t
 **D22 — Security posture.** Secrets via env only (`.env.example` committed, gitleaks in CI). Stripe test mode exclusively. Public surface = demo app behind Cloudflare Tunnel + rate limiting; operational surfaces (Trigger dashboard, Drizzle Studio, MinIO console) behind Cloudflare Access or Tailscale. All demo data synthetic.
 
 **D23 — License: Apache-2.0.** Matches the ecosystem (Trigger.dev, Formance), includes patent grant.
+
+**D24 — Canonical statuses: `pending, settled, failed, reversed`.** Mirrors D15: `sourceType`/native status stored verbatim, mapping is data-driven per adapter, unmapped statuses quarantine. Not monotonic by design (D8).

@@ -1,0 +1,117 @@
+[
+  {
+    "sourceId": "LED-T-0001",
+    "result": {
+      "ok": true,
+      "txn": {
+        "source": "ledger",
+        "sourceAccount": "mercadia:operating",
+        "sourceId": "LED-T-0001",
+        "sourceType": "payment",
+        "type": "payment",
+        "amountMinor": "6737",
+        "currency": "USD",
+        "occurredAt": "2026-05-03T09:15:00.000Z",
+        "valueDate": "2026-05-03",
+        "account": "mercadia:operating",
+        "reference": "ch_test_0001",
+        "status": "settled",
+        "metadata": {
+          "description": "Customer payment — order #9001"
+        }
+      }
+    }
+  },
+  {
+    "sourceId": "LED-T-R001",
+    "result": {
+      "ok": true,
+      "txn": {
+        "source": "ledger",
+        "sourceAccount": "mercadia:operating",
+        "sourceId": "LED-T-R001",
+        "sourceType": "refund",
+        "type": "refund",
+        "amountMinor": "-1500",
+        "currency": "USD",
+        "occurredAt": "2026-05-05T14:00:00.000Z",
+        "valueDate": "2026-05-05",
+        "account": "mercadia:operating",
+        "reference": "re_test_0001",
+        "status": "settled",
+        "metadata": {
+          "description": "Refund — order #9001"
+        }
+      }
+    }
+  },
+  {
+    "sourceId": "LED-T-0002",
+    "result": {
+      "ok": true,
+      "txn": {
+        "source": "ledger",
+        "sourceAccount": "mercadia:operating",
+        "sourceId": "LED-T-0002",
+        "sourceType": "payment",
+        "type": "payment",
+        "amountMinor": "12000",
+        "currency": "USD",
+        "occurredAt": "2026-05-06T08:30:00.000Z",
+        "valueDate": "2026-05-06",
+        "account": "mercadia:operating",
+        "reference": null,
+        "status": "pending",
+        "metadata": {
+          "description": "Manual journal — wholesale order"
+        }
+      }
+    }
+  },
+  {
+    "sourceId": "LED-T-0003",
+    "result": {
+      "ok": true,
+      "txn": {
+        "source": "ledger",
+        "sourceAccount": "mercadia:operating-jp",
+        "sourceId": "LED-T-0003",
+        "sourceType": "payment",
+        "type": "payment",
+        "amountMinor": "5400",
+        "currency": "JPY",
+        "occurredAt": "2026-05-07T01:00:00.000Z",
+        "valueDate": "2026-05-07",
+        "account": "mercadia:operating-jp",
+        "reference": "ch_test_0002",
+        "status": "settled",
+        "metadata": {
+          "description": "Customer payment — JP storefront"
+        }
+      }
+    }
+  },
+  {
+    "sourceId": "LED-T-0004",
+    "result": {
+      "ok": true,
+      "txn": {
+        "source": "ledger",
+        "sourceAccount": "mercadia:operating",
+        "sourceId": "LED-T-0004",
+        "sourceType": "payment",
+        "type": "payment",
+        "amountMinor": "4200",
+        "currency": "USD",
+        "occurredAt": "2026-05-08T10:00:00.000Z",
+        "valueDate": "2026-05-08",
+        "account": "mercadia:operating",
+        "reference": "ch_test_0003",
+        "status": "reversed",
+        "metadata": {
+          "description": "Voided posting"
+        }
+      }
+    }
+  }
+]
