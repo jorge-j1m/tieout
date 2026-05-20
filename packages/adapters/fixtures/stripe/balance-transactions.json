@@ -1,0 +1,71 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "txn_t_ch_0001",
+      "object": "balance_transaction",
+      "amount": 6737,
+      "currency": "usd",
+      "created": 1777798800,
+      "available_on": 1777939200,
+      "description": "Charge for order #9001",
+      "fee": 225,
+      "fee_details": [{ "amount": 225, "currency": "usd", "type": "stripe_fee" }],
+      "net": 6512,
+      "reporting_category": "charge",
+      "source": "ch_test_0001",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_t_re_0001",
+      "object": "balance_transaction",
+      "amount": -1500,
+      "currency": "usd",
+      "created": 1777885200,
+      "available_on": 1778112000,
+      "description": "Refund for order #9001",
+      "fee": 0,
+      "fee_details": [],
+      "net": -1500,
+      "reporting_category": "refund",
+      "source": "re_test_0001",
+      "status": "available",
+      "type": "refund"
+    },
+    {
+      "id": "txn_t_fee_0001",
+      "object": "balance_transaction",
+      "amount": -850,
+      "currency": "usd",
+      "created": 1777890000,
+      "available_on": 1778112000,
+      "description": "Radar for Fraud Teams",
+      "fee": 0,
+      "fee_details": [],
+      "net": -850,
+      "reporting_category": "fee",
+      "source": null,
+      "status": "available",
+      "type": "stripe_fee"
+    },
+    {
+      "id": "txn_t_ch_0002",
+      "object": "balance_transaction",
+      "amount": 9900,
+      "currency": "usd",
+      "created": 1777893600,
+      "available_on": 1778112000,
+      "description": "Charge for order #9002",
+      "fee": 317,
+      "fee_details": [{ "amount": 317, "currency": "usd", "type": "stripe_fee" }],
+      "net": 9583,
+      "reporting_category": "charge",
+      "source": "ch_test_0002",
+      "status": "pending",
+      "type": "charge"
+    }
+  ],
+  "has_more": false,
+  "url": "/v1/balance_transactions"
+}

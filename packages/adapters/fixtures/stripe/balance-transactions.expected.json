@@ -1,0 +1,106 @@
+[
+  {
+    "sourceId": "txn_t_ch_0001",
+    "result": {
+      "ok": true,
+      "txn": {
+        "source": "stripe",
+        "sourceAccount": "acct_test_mercadia",
+        "sourceId": "txn_t_ch_0001",
+        "sourceType": "charge",
+        "type": "payment",
+        "amountMinor": "6737",
+        "currency": "USD",
+        "occurredAt": "2026-05-03T09:00:00.000Z",
+        "valueDate": "2026-05-05",
+        "account": "acct_test_mercadia",
+        "reference": "ch_test_0001",
+        "status": "settled",
+        "metadata": {
+          "fee": 225,
+          "net": 6512,
+          "reportingCategory": "charge",
+          "description": "Charge for order #9001"
+        }
+      }
+    }
+  },
+  {
+    "sourceId": "txn_t_re_0001",
+    "result": {
+      "ok": true,
+      "txn": {
+        "source": "stripe",
+        "sourceAccount": "acct_test_mercadia",
+        "sourceId": "txn_t_re_0001",
+        "sourceType": "refund",
+        "type": "refund",
+        "amountMinor": "-1500",
+        "currency": "USD",
+        "occurredAt": "2026-05-04T09:00:00.000Z",
+        "valueDate": "2026-05-07",
+        "account": "acct_test_mercadia",
+        "reference": "re_test_0001",
+        "status": "settled",
+        "metadata": {
+          "fee": 0,
+          "net": -1500,
+          "reportingCategory": "refund",
+          "description": "Refund for order #9001"
+        }
+      }
+    }
+  },
+  {
+    "sourceId": "txn_t_fee_0001",
+    "result": {
+      "ok": true,
+      "txn": {
+        "source": "stripe",
+        "sourceAccount": "acct_test_mercadia",
+        "sourceId": "txn_t_fee_0001",
+        "sourceType": "stripe_fee",
+        "type": "fee",
+        "amountMinor": "-850",
+        "currency": "USD",
+        "occurredAt": "2026-05-04T10:20:00.000Z",
+        "valueDate": "2026-05-07",
+        "account": "acct_test_mercadia",
+        "reference": null,
+        "status": "settled",
+        "metadata": {
+          "fee": 0,
+          "net": -850,
+          "reportingCategory": "fee",
+          "description": "Radar for Fraud Teams"
+        }
+      }
+    }
+  },
+  {
+    "sourceId": "txn_t_ch_0002",
+    "result": {
+      "ok": true,
+      "txn": {
+        "source": "stripe",
+        "sourceAccount": "acct_test_mercadia",
+        "sourceId": "txn_t_ch_0002",
+        "sourceType": "charge",
+        "type": "payment",
+        "amountMinor": "9900",
+        "currency": "USD",
+        "occurredAt": "2026-05-04T11:20:00.000Z",
+        "valueDate": "2026-05-07",
+        "account": "acct_test_mercadia",
+        "reference": "ch_test_0002",
+        "status": "pending",
+        "metadata": {
+          "fee": 317,
+          "net": 9583,
+          "reportingCategory": "charge",
+          "description": "Charge for order #9002"
+        }
+      }
+    }
+  }
+]
