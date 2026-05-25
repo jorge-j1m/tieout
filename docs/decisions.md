@@ -59,3 +59,5 @@ Dense by design. One entry per decision, with why. If a decision changes, edit t
 **D23 — License: Apache-2.0.** Matches the ecosystem (Trigger.dev, Formance), includes patent grant.
 
 **D24 — Canonical statuses: `pending, settled, failed, reversed`.** Mirrors D15: `sourceType`/native status stored verbatim, mapping is data-driven per adapter, unmapped statuses quarantine. Not monotonic by design (D8).
+
+**D25 — Stage 1 sources are seed-materialized files.** `pnpm seed` writes the deterministic Mercadia dataset to committed JSON (`packages/seed/data/`): a ledger export and a Stripe balance-transactions list fixture. Adapters land these whole units keyed by content hash, so tests and the quickstart never touch the network and a restated file is naturally a new unit. A live API client replaces only the read inside `land()` (window-keyed idempotency comes with it); `normalize()` and everything downstream are already final.

@@ -1,0 +1,967 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "txn_ch_0001",
+      "object": "balance_transaction",
+      "amount": 4900,
+      "currency": "usd",
+      "created": 1777622400,
+      "available_on": 1777766400,
+      "description": "Charge for order #1000",
+      "fee": 172,
+      "fee_details": [
+        {
+          "amount": 172,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 4728,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0001",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0002",
+      "object": "balance_transaction",
+      "amount": 5037,
+      "currency": "usd",
+      "created": 1777734780,
+      "available_on": 1777852800,
+      "description": "Charge for order #1001",
+      "fee": 176,
+      "fee_details": [
+        {
+          "amount": 176,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 4861,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0002",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0003",
+      "object": "balance_transaction",
+      "amount": 5174,
+      "currency": "usd",
+      "created": 1777811160,
+      "available_on": 1777939200,
+      "description": "Charge for order #1002",
+      "fee": 180,
+      "fee_details": [
+        {
+          "amount": 180,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 4994,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0003",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0004",
+      "object": "balance_transaction",
+      "amount": 5311,
+      "currency": "usd",
+      "created": 1777887540,
+      "available_on": 1778025600,
+      "description": "Charge for order #1003",
+      "fee": 184,
+      "fee_details": [
+        {
+          "amount": 184,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 5127,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0004",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0005",
+      "object": "balance_transaction",
+      "amount": 5448,
+      "currency": "usd",
+      "created": 1777999920,
+      "available_on": 1778112000,
+      "description": "Charge for order #1004",
+      "fee": 187,
+      "fee_details": [
+        {
+          "amount": 187,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 5261,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0005",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_re_0005",
+      "object": "balance_transaction",
+      "amount": -5448,
+      "currency": "usd",
+      "created": 1778174400,
+      "available_on": 1778284800,
+      "description": "Refund for order #1004",
+      "fee": 0,
+      "fee_details": [],
+      "net": -5448,
+      "reporting_category": "refund",
+      "source": "re_mercadia_0005",
+      "status": "available",
+      "type": "refund"
+    },
+    {
+      "id": "txn_ch_0006",
+      "object": "balance_transaction",
+      "amount": 5585,
+      "currency": "usd",
+      "created": 1778072700,
+      "available_on": 1778198400,
+      "description": "Charge for order #1005",
+      "fee": 191,
+      "fee_details": [
+        {
+          "amount": 191,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 5394,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0006",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0007",
+      "object": "balance_transaction",
+      "amount": 5722,
+      "currency": "usd",
+      "created": 1778149080,
+      "available_on": 1778284800,
+      "description": "Charge for order #1006",
+      "fee": 195,
+      "fee_details": [
+        {
+          "amount": 195,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 5527,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0007",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0008",
+      "object": "balance_transaction",
+      "amount": 5859,
+      "currency": "usd",
+      "created": 1778261460,
+      "available_on": 1778371200,
+      "description": "Charge for order #1007",
+      "fee": 199,
+      "fee_details": [
+        {
+          "amount": 199,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 5660,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0008",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0009",
+      "object": "balance_transaction",
+      "amount": 5996,
+      "currency": "usd",
+      "created": 1778337840,
+      "available_on": 1778457600,
+      "description": "Charge for order #1008",
+      "fee": 203,
+      "fee_details": [
+        {
+          "amount": 203,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 5793,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0009",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0010",
+      "object": "balance_transaction",
+      "amount": 6133,
+      "currency": "usd",
+      "created": 1778414220,
+      "available_on": 1778544000,
+      "description": "Charge for order #1009",
+      "fee": 207,
+      "fee_details": [
+        {
+          "amount": 207,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 5926,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0010",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0011",
+      "object": "balance_transaction",
+      "amount": 6270,
+      "currency": "usd",
+      "created": 1778487000,
+      "available_on": 1778630400,
+      "description": "Charge for order #1010",
+      "fee": 211,
+      "fee_details": [
+        {
+          "amount": 211,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 6059,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0011",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0012",
+      "object": "balance_transaction",
+      "amount": 6407,
+      "currency": "usd",
+      "created": 1778599380,
+      "available_on": 1778716800,
+      "description": "Charge for order #1011",
+      "fee": 215,
+      "fee_details": [
+        {
+          "amount": 215,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 6192,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0012",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0013",
+      "object": "balance_transaction",
+      "amount": 6544,
+      "currency": "usd",
+      "created": 1778675760,
+      "available_on": 1778803200,
+      "description": "Charge for order #1012",
+      "fee": 219,
+      "fee_details": [
+        {
+          "amount": 219,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 6325,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0013",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0014",
+      "object": "balance_transaction",
+      "amount": 6681,
+      "currency": "usd",
+      "created": 1778752140,
+      "available_on": 1778889600,
+      "description": "Charge for order #1013",
+      "fee": 223,
+      "fee_details": [
+        {
+          "amount": 223,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 6458,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0014",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_re_0014",
+      "object": "balance_transaction",
+      "amount": -6681,
+      "currency": "usd",
+      "created": 1778930400,
+      "available_on": 1779062400,
+      "description": "Refund for order #1013",
+      "fee": 0,
+      "fee_details": [],
+      "net": -6681,
+      "reporting_category": "refund",
+      "source": "re_mercadia_0014",
+      "status": "available",
+      "type": "refund"
+    },
+    {
+      "id": "txn_ch_0015",
+      "object": "balance_transaction",
+      "amount": 6818,
+      "currency": "usd",
+      "created": 1778860920,
+      "available_on": 1778976000,
+      "description": "Charge for order #1014",
+      "fee": 227,
+      "fee_details": [
+        {
+          "amount": 227,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 6591,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0015",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0016",
+      "object": "balance_transaction",
+      "amount": 6955,
+      "currency": "usd",
+      "created": 1778937300,
+      "available_on": 1779062400,
+      "description": "Charge for order #1015",
+      "fee": 231,
+      "fee_details": [
+        {
+          "amount": 231,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 6724,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0016",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0017",
+      "object": "balance_transaction",
+      "amount": 7092,
+      "currency": "usd",
+      "created": 1779013680,
+      "available_on": 1779148800,
+      "description": "Charge for order #1016",
+      "fee": 235,
+      "fee_details": [
+        {
+          "amount": 235,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 6857,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0017",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0018",
+      "object": "balance_transaction",
+      "amount": 7229,
+      "currency": "usd",
+      "created": 1779126060,
+      "available_on": 1779235200,
+      "description": "Charge for order #1017",
+      "fee": 239,
+      "fee_details": [
+        {
+          "amount": 239,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 6990,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0018",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0019",
+      "object": "balance_transaction",
+      "amount": 7366,
+      "currency": "usd",
+      "created": 1779202440,
+      "available_on": 1779321600,
+      "description": "Charge for order #1018",
+      "fee": 243,
+      "fee_details": [
+        {
+          "amount": 243,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 7123,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0019",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0020",
+      "object": "balance_transaction",
+      "amount": 7503,
+      "currency": "usd",
+      "created": 1779275220,
+      "available_on": 1779408000,
+      "description": "Charge for order #1019",
+      "fee": 247,
+      "fee_details": [
+        {
+          "amount": 247,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 7256,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0020",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0021",
+      "object": "balance_transaction",
+      "amount": 7640,
+      "currency": "usd",
+      "created": 1779351600,
+      "available_on": 1779494400,
+      "description": "Charge for order #1020",
+      "fee": 251,
+      "fee_details": [
+        {
+          "amount": 251,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 7389,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0021",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0022",
+      "object": "balance_transaction",
+      "amount": 7777,
+      "currency": "usd",
+      "created": 1779463980,
+      "available_on": 1779580800,
+      "description": "Charge for order #1021",
+      "fee": 255,
+      "fee_details": [
+        {
+          "amount": 255,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 7522,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0022",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0023",
+      "object": "balance_transaction",
+      "amount": 7914,
+      "currency": "usd",
+      "created": 1779540360,
+      "available_on": 1779667200,
+      "description": "Charge for order #1022",
+      "fee": 259,
+      "fee_details": [
+        {
+          "amount": 259,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 7655,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0023",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_re_0023",
+      "object": "balance_transaction",
+      "amount": -7914,
+      "currency": "usd",
+      "created": 1779722400,
+      "available_on": 1779840000,
+      "description": "Refund for order #1022",
+      "fee": 0,
+      "fee_details": [],
+      "net": -7914,
+      "reporting_category": "refund",
+      "source": "re_mercadia_0023",
+      "status": "available",
+      "type": "refund"
+    },
+    {
+      "id": "txn_ch_0024",
+      "object": "balance_transaction",
+      "amount": 8051,
+      "currency": "usd",
+      "created": 1779616740,
+      "available_on": 1779753600,
+      "description": "Charge for order #1023",
+      "fee": 263,
+      "fee_details": [
+        {
+          "amount": 263,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 7788,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0024",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0025",
+      "object": "balance_transaction",
+      "amount": 8188,
+      "currency": "usd",
+      "created": 1779725520,
+      "available_on": 1779840000,
+      "description": "Charge for order #1024",
+      "fee": 267,
+      "fee_details": [
+        {
+          "amount": 267,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 7921,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0025",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0026",
+      "object": "balance_transaction",
+      "amount": 8325,
+      "currency": "usd",
+      "created": 1779801900,
+      "available_on": 1779926400,
+      "description": "Charge for order #1025",
+      "fee": 271,
+      "fee_details": [
+        {
+          "amount": 271,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 8054,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0026",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0027",
+      "object": "balance_transaction",
+      "amount": 8462,
+      "currency": "usd",
+      "created": 1777631880,
+      "available_on": 1777766400,
+      "description": "Charge for order #1026",
+      "fee": 275,
+      "fee_details": [
+        {
+          "amount": 275,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 8187,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0027",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0028",
+      "object": "balance_transaction",
+      "amount": 8599,
+      "currency": "usd",
+      "created": 1777744260,
+      "available_on": 1777852800,
+      "description": "Charge for order #1027",
+      "fee": 279,
+      "fee_details": [
+        {
+          "amount": 279,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 8320,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0028",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0029",
+      "object": "balance_transaction",
+      "amount": 8736,
+      "currency": "usd",
+      "created": 1777817040,
+      "available_on": 1777939200,
+      "description": "Charge for order #1028",
+      "fee": 283,
+      "fee_details": [
+        {
+          "amount": 283,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 8453,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0029",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0030",
+      "object": "balance_transaction",
+      "amount": 8873,
+      "currency": "usd",
+      "created": 1777893420,
+      "available_on": 1778025600,
+      "description": "Charge for order #1029",
+      "fee": 287,
+      "fee_details": [
+        {
+          "amount": 287,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 8586,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0030",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0031",
+      "object": "balance_transaction",
+      "amount": 9010,
+      "currency": "usd",
+      "created": 1777969800,
+      "available_on": 1778112000,
+      "description": "Charge for order #1030",
+      "fee": 291,
+      "fee_details": [
+        {
+          "amount": 291,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 8719,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0031",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0032",
+      "object": "balance_transaction",
+      "amount": 9147,
+      "currency": "usd",
+      "created": 1778082180,
+      "available_on": 1778198400,
+      "description": "Charge for order #1031",
+      "fee": 295,
+      "fee_details": [
+        {
+          "amount": 295,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 8852,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0032",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_re_0032",
+      "object": "balance_transaction",
+      "amount": -9147,
+      "currency": "usd",
+      "created": 1778268000,
+      "available_on": 1778371200,
+      "description": "Refund for order #1031",
+      "fee": 0,
+      "fee_details": [],
+      "net": -9147,
+      "reporting_category": "refund",
+      "source": "re_mercadia_0032",
+      "status": "available",
+      "type": "refund"
+    },
+    {
+      "id": "txn_ch_0033",
+      "object": "balance_transaction",
+      "amount": 9284,
+      "currency": "usd",
+      "created": 1778158560,
+      "available_on": 1778284800,
+      "description": "Charge for order #1032",
+      "fee": 299,
+      "fee_details": [
+        {
+          "amount": 299,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 8985,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0033",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0034",
+      "object": "balance_transaction",
+      "amount": 9421,
+      "currency": "usd",
+      "created": 1778231340,
+      "available_on": 1778371200,
+      "description": "Charge for order #1033",
+      "fee": 303,
+      "fee_details": [
+        {
+          "amount": 303,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 9118,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0034",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0035",
+      "object": "balance_transaction",
+      "amount": 9558,
+      "currency": "usd",
+      "created": 1778343720,
+      "available_on": 1778457600,
+      "description": "Charge for order #1034",
+      "fee": 307,
+      "fee_details": [
+        {
+          "amount": 307,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 9251,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0035",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0036",
+      "object": "balance_transaction",
+      "amount": 9695,
+      "currency": "usd",
+      "created": 1778420100,
+      "available_on": 1778544000,
+      "description": "Charge for order #1035",
+      "fee": 311,
+      "fee_details": [
+        {
+          "amount": 311,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 9384,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0036",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0037",
+      "object": "balance_transaction",
+      "amount": 9832,
+      "currency": "usd",
+      "created": 1778496480,
+      "available_on": 1778630400,
+      "description": "Charge for order #1036",
+      "fee": 315,
+      "fee_details": [
+        {
+          "amount": 315,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 9517,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0037",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0038",
+      "object": "balance_transaction",
+      "amount": 9969,
+      "currency": "usd",
+      "created": 1778605260,
+      "available_on": 1778716800,
+      "description": "Charge for order #1037",
+      "fee": 319,
+      "fee_details": [
+        {
+          "amount": 319,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 9650,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0038",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0039",
+      "object": "balance_transaction",
+      "amount": 10106,
+      "currency": "usd",
+      "created": 1778681640,
+      "available_on": 1778803200,
+      "description": "Charge for order #1038",
+      "fee": 323,
+      "fee_details": [
+        {
+          "amount": 323,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 9783,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0039",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_ch_0040",
+      "object": "balance_transaction",
+      "amount": 10243,
+      "currency": "usd",
+      "created": 1778758020,
+      "available_on": 1778889600,
+      "description": "Charge for order #1039",
+      "fee": 327,
+      "fee_details": [
+        {
+          "amount": 327,
+          "currency": "usd",
+          "type": "stripe_fee"
+        }
+      ],
+      "net": 9916,
+      "reporting_category": "charge",
+      "source": "ch_mercadia_0040",
+      "status": "available",
+      "type": "charge"
+    },
+    {
+      "id": "txn_fee_radar_0001",
+      "object": "balance_transaction",
+      "amount": -850,
+      "currency": "usd",
+      "created": 1778814000,
+      "available_on": 1778976000,
+      "description": "Radar for Fraud Teams — May",
+      "fee": 0,
+      "fee_details": [],
+      "net": -850,
+      "reporting_category": "fee",
+      "source": null,
+      "status": "available",
+      "type": "stripe_fee"
+    }
+  ],
+  "has_more": false,
+  "url": "/v1/balance_transactions"
+}
