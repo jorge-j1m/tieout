@@ -66,6 +66,7 @@ POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB
 DATABASE_URL=postgres://...@127.0.0.1:5432/tieout
 MINIO_ROOT_USER / MINIO_ROOT_PASSWORD
 S3_ENDPOINT=http://127.0.0.1:9000   # raw file archive
+TRIGGER_PROJECT_REF=                # from Trigger.dev Cloud project (proj_…)
 TRIGGER_SECRET_KEY=                 # from Trigger.dev Cloud project
 STRIPE_SECRET_KEY=sk_test_...       # TEST MODE ONLY — never a live key
 SLACK_WEBHOOK_URL=                  # run summaries / failures
