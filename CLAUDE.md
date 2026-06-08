@@ -19,7 +19,8 @@ packages/core   Pure domain: money, matching, classification. ZERO I/O.
 packages/db     Drizzle schema + migrations. Constraints are correctness features.
 packages/adapters   SourceAdapter implementations + golden-file fixtures
 packages/seed   Deterministic Mercadia dataset with planted breaks
-docs/           decisions.md · topology.md · specs/
+docs/           how-it-works.md (plain-English engine guide) · onboarding.md (codemap +
+                change recipes) · decisions.md · topology.md · specs/
 ```
 
 ## Commands & definition of done
