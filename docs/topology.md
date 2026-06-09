@@ -1,0 +1,95 @@
+# Topology
+
+How the system runs, stage by stage. The repo deploys to a single Ubuntu box ("the box") reachable over Tailscale; development happens via Remote-SSH against it. Update this doc whenever a service, port, volume, or exposure rule changes.
+
+## Environments
+
+- **dev** — code runs on the box via `pnpm dev` (`trigger.dev dev` executes tasks locally against Trigger.dev Cloud's orchestration; dev runs are not billed). Postgres + MinIO from the compose file below.
+- **prod (Stage 3+)** — same box, containers built by CI, tasks deployed to Trigger.dev (Cloud until Stage 4).
+
+## Stage 1 compose (current)
+
+One compose project, infrastructure only — app code runs on the host during dev.
+
+```yaml
+# docker-compose.yml
+name: tieout
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tieout}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-tieout}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set in .env}
+    ports:
+      - "127.0.0.1:9000:9000"   # S3 API
+      - "127.0.0.1:9001:9001"   # console
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  miniodata:
+```
+
+Ports bind to `127.0.0.1` deliberately: app code runs on the same host, and nothing is reachable from outside the box. Admin access from the laptop goes through the SSH/Tailscale session, not exposed ports.
+
+## Environment variables
+
+Committed as `.env.example`, real values in `.env` (gitignored). Current set:
+
+```
+POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB
+DATABASE_URL=postgres://...@127.0.0.1:5432/tieout
+MINIO_ROOT_USER / MINIO_ROOT_PASSWORD
+S3_ENDPOINT=http://127.0.0.1:9000   # raw file archive
+TRIGGER_SECRET_KEY=                 # from Trigger.dev Cloud project
+STRIPE_SECRET_KEY=sk_test_...       # TEST MODE ONLY — never a live key
+SLACK_WEBHOOK_URL=                  # run summaries / failures
+```
+
+## Exposure rules (all stages)
+
+- **Public internet**: only the demo web app, only from Stage 3, only via Cloudflare Tunnel (`cloudflared` as a compose service; outbound-only, no router ports). Cloudflare rate limiting on.
+- **Operator surfaces** (Trigger.dev dashboard, Drizzle Studio, MinIO console): Tailscale or Cloudflare Access. Never public.
+- **SSH**: Tailscale only, key auth only.
+
+## Stage 3 target — two compose stacks
+
+Separate compose projects with separate networks and separate Postgres instances, so the orchestrator can be rebuilt without touching financial data:
+
+1. **App stack** (`tieout`): `caddy` (or direct `cloudflared`) → `web` (Next.js) + `api` (Hono); `postgres`; `minio`; `cloudflared`; a one-shot `migrate` service that gates app start (`depends_on: condition: service_completed_successfully`).
+2. **Trigger stack** (`trigger`): the official self-host compose — webapp, supervisor, its own Postgres/Redis/ClickHouse, registry — **only if Stage 4 is delayed**; the plan of record is to stay on Trigger.dev Cloud until k3s.
+
+Deploys: GitHub Actions builds images → GHCR → SSH to the box → `docker compose pull && docker compose up -d`.
+
+## Backups
+
+From the moment real schema exists: nightly `pg_dump` to MinIO (cron or scheduled task) + restic copy offsite (e.g. B2). A restore has to be rehearsed once before Stage 3 ships — an untested backup doesn't count.
+
+## Resource budget
+
+Stage 1 fits anywhere. Stage 4 (k3s + self-hosted Trigger.dev via Helm) wants 6+ vCPU / 12+ GB for the Trigger stack alone, plus app stack and k3s overhead → 16 GB box minimum, 32 GB comfortable. Check before migrating.
