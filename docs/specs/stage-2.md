@@ -1,8 +1,8 @@
 # Spec: Stage 2 — settlement reality
 
-> **Status: not active.** Stage 1 (`stage-1.md`) is the active spec. This document is
-> the plan of record for what comes next, collected from the promises already made in
-> `decisions.md`, `how-it-works.md`, and the Stage 1 parking lot.
+> **Status: ACTIVE.** Stage 1 is complete (all acceptance boxes verified); this is now
+> the working spec. Collected from the promises made in `decisions.md`,
+> `how-it-works.md`, and the Stage 1 parking lot.
 
 **Goal.** Reconcile the messy middle of real payment operations: PSP settlement files
 (restated, control-totaled, locale-formatted, id-less), grouped money movements (one
@@ -29,10 +29,17 @@ trail) holds for the richer ruleset.
    env flag; fixtures stay the default for tests and the demo. The hourly schedule
    returns with it (window-keyed idempotency keys, 48h lookback already built).
 5. **Matching v2 (`ruleset-v2`)** in `packages/core`, all of it pure and property-tested:
-   - **Grouped matching**: 1:N / N:1 — one Stripe payout vs. its charges minus fees;
-     one ledger batch entry vs. N settlement lines. `match_members` already supports
-     N members per match (D17 anticipated this); groups record their grouping key in
+   - **Grouped matching**: N:1 — one ledger settlement entry vs. N PagoLat lines,
+     compared on a **net basis** (`netMinor`: amount net of source-side fees, a new
+     canonical field defaulting to the amount). External records carry a `groupRef`
+     (the settlement unit they belong to); the ledger anchor's `reference` names the
+     same key. `match_members` already supports N members per match (D17 anticipated
+     this); groups record their grouping key, sums, and applied tolerance/rate in
      match details. New invariant: group sums preserved (within recorded tolerance).
+     A Stripe payout reconciles **1:1** against its ledger deposit with an
+     opposite-sign rule (transfer legs sum to zero) — "payout vs. its charges" is
+     *intra-source* integrity, not cross-source reconciliation, and is deferred (see
+     Later).
    - **Tolerances** as explicit, recorded rules (never silent fuzziness): per-rule
      config on `MatchingConfig`, applied tolerance recorded on the match, defaults
      recorded in run `stats` so runs stay self-describing.
@@ -72,8 +79,9 @@ as hints only — poll is truth); multi-tenancy. Note ideas under "Later".
 
 ## Acceptance
 
-- [ ] A Stripe payout groups its charges minus fees into one match; group sums proven
-      preserved by property test.
+- [ ] A PagoLat settlement groups its lines into one match against the ledger's
+      settlement entry on a net basis; group sums proven preserved by property test.
+      A Stripe payout reconciles 1:1 against its ledger deposit (opposite signs).
 - [ ] A PagoLat day-file lands, normalizes (locale decimals parsed straight to bigint),
       and its lines match ledger entries N:1; a file failing its control totals
       quarantines as a batch.
@@ -115,6 +123,9 @@ as hints only — poll is truth); multi-tenancy. Note ideas under "Later".
 
 - Webhooks as freshness hints (poll remains truth, D21).
 - Per-source data-quality scorecards (quarantine rates, restatement frequency).
+- Intra-source group integrity ("does this payout equal its charges minus fees,
+  inside Stripe?") — a D13-style completeness check, not a cross-source match; needs
+  its own surface so it doesn't masquerade as reconciliation.
 
 # When this stage is done
 

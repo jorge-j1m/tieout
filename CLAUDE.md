@@ -69,4 +69,4 @@ A change is complete when typecheck, lint, and tests pass AND behavior changes c
 
 ## Current focus
 
-`docs/specs/stage-1.md`. Read it before writing any code.
+`docs/specs/stage-2.md`. Read it before writing any code. (Stage 1 is complete; its spec stays as the record of what was built.)

@@ -69,8 +69,8 @@ TypeScript end to end. Postgres + Drizzle for the data spine, Trigger.dev for du
 
 Early development. Staged roadmap:
 
-- **Stage 1 (current)** — first honest reconciliation: Stripe + internal ledger, 1:1 matching, breaks persisted, seed data, property-tested core. Spec: `docs/specs/stage-1.md`.
-- **Stage 2** — settlement reality: PSP settlement files, grouped matching (1:N fees, N:1 settlements), tolerances + FX at match time, settlement lag, outbox re-evaluation, headless exceptions. Spec: `docs/specs/stage-2.md`.
+- **Stage 1 (complete)** — first honest reconciliation: Stripe + internal ledger, 1:1 matching, breaks persisted, seed data, property-tested core. Spec: `docs/specs/stage-1.md`.
+- **Stage 2 (current)** — settlement reality: PSP settlement files, grouped matching (1:N fees, N:1 settlements), tolerances + FX at match time, settlement lag, outbox re-evaluation, headless exceptions. Spec: `docs/specs/stage-2.md`.
 - **Stage 3** — show your work: dashboard, exceptions UI, alerts, auth, self-hosted deployment, public demo. Spec: `docs/specs/stage-3.md`.
 - **Stage 4** — k3s migration, bank + stablecoin sources, three-way payout reconciliation.
 

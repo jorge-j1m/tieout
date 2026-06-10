@@ -1,5 +1,9 @@
 # Spec: Stage 1 — first honest reconciliation
 
+> **Status: complete.** Every acceptance box below was verified (the integration suite
+> is the living proof). Kept as the record of what Stage 1 promised; the active spec
+> is [`stage-2.md`](stage-2.md).
+
 **Goal.** On a fresh clone, ingest the internal ledger and Stripe (test mode / seed fixtures), normalize both, run a reconciliation, and persist breaks — finding exactly the planted breaks in the seed data, deterministically, twice in a row.
 
 ## In scope
