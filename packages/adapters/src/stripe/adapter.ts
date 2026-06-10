@@ -102,41 +102,103 @@ export function normalizeStripeBalanceTxn(raw: RawForNormalize): NormalizeResult
   };
 }
 
+export interface StripeLiveConfig {
+  /** TEST MODE ONLY (D22): the adapter refuses anything but an sk_test_ key. */
+  apiKey: string;
+  /** Injectable for tests; defaults to global fetch. */
+  fetchImpl?: typeof fetch;
+}
+
 export interface StripeAdapterConfig {
   /**
    * Committed balance-transactions list fixture ({ object: "list", data: [...] }).
-   * Stage 1 lands from fixtures so nothing ever needs network; the live API client
-   * replaces only this read when it arrives.
+   * The default: tests and the demo never touch the network (D25).
    */
-  fixtureFile: string;
+  fixtureFile?: string;
+  /** When set, `land()` reads the real API for the window instead of the fixture. */
+  live?: StripeLiveConfig;
   /** Stripe account id (acct_…) — the sourceAccount of every record. */
   account: string;
   connection?: string;
 }
 
+/** Paginate /v1/balance_transactions for a window — the only part the live client replaces (D25). */
+async function fetchBalanceTransactions(
+  live: StripeLiveConfig,
+  window: { from: Date; to: Date },
+): Promise<unknown[]> {
+  if (!live.apiKey.startsWith("sk_test_")) {
+    throw new Error("stripe live landing refuses non-test-mode keys (D22) — got a key not starting with sk_test_");
+  }
+  const fetchImpl = live.fetchImpl ?? fetch;
+  const data: unknown[] = [];
+  let startingAfter: string | undefined;
+  for (;;) {
+    const params = new URLSearchParams({
+      limit: "100",
+      "created[gte]": String(Math.floor(window.from.getTime() / 1000)),
+      "created[lt]": String(Math.ceil(window.to.getTime() / 1000)),
+    });
+    if (startingAfter !== undefined) params.set("starting_after", startingAfter);
+    const res = await fetchImpl(`https://api.stripe.com/v1/balance_transactions?${params}`, {
+      headers: { Authorization: `Bearer ${live.apiKey}` },
+    });
+    if (!res.ok) {
+      throw new Error(`stripe balance_transactions ${res.status}: ${await res.text()}`);
+    }
+    const page = (await res.json()) as { data?: unknown[]; has_more?: boolean };
+    if (!Array.isArray(page.data)) {
+      throw new Error("stripe balance_transactions: malformed list response");
+    }
+    data.push(...page.data);
+    if (page.has_more !== true || page.data.length === 0) return data;
+    const last = page.data[page.data.length - 1] as { id?: unknown };
+    if (typeof last.id !== "string") {
+      throw new Error("stripe balance_transactions: page item without id — cannot paginate");
+    }
+    startingAfter = last.id;
+  }
+}
+
 export function createStripeAdapter(config: StripeAdapterConfig): SourceAdapter {
+  if (config.fixtureFile === undefined && config.live === undefined) {
+    throw new Error("stripe adapter needs a fixtureFile or a live config");
+  }
   return {
     source: STRIPE_SOURCE,
     normalizerVersion: STRIPE_NORMALIZER_VERSION,
 
-    async land(_ctx) {
-      const list = JSON.parse(await readFile(config.fixtureFile, "utf8")) as {
-        object?: unknown;
-        data?: unknown;
-      };
-      if (list.object !== "list" || !Array.isArray(list.data)) {
-        throw new Error(`${config.fixtureFile}: expected a Stripe list of balance transactions`);
+    async land(ctx) {
+      let data: unknown[];
+      let externalRef: string;
+      let idempotencyKey: string;
+      if (config.live !== undefined) {
+        data = await fetchBalanceTransactions(config.live, ctx.window);
+        // Window-keyed idempotency (D12/D25): re-covering the window converges.
+        const windowKey = `${ctx.window.from.toISOString()}..${ctx.window.to.toISOString()}`;
+        externalRef = `balance_transactions:${windowKey}`;
+        idempotencyKey = `stripe:${config.account}:${windowKey}`;
+      } else {
+        const list = JSON.parse(await readFile(config.fixtureFile!, "utf8")) as {
+          object?: unknown;
+          data?: unknown;
+        };
+        if (list.object !== "list" || !Array.isArray(list.data)) {
+          throw new Error(`${config.fixtureFile}: expected a Stripe list of balance transactions`);
+        }
+        data = list.data;
+        externalRef = `balance_transactions:${path.basename(config.fixtureFile!)}`;
+        idempotencyKey = `stripe:${config.account}:${contentHash(data)}`;
       }
-      const listHash = contentHash(list.data);
       return [
         {
           source: STRIPE_SOURCE,
-          connection: config.connection ?? "fixture",
+          connection: config.connection ?? (config.live ? "api" : "fixture"),
           kind: "api",
-          externalRef: `balance_transactions:${path.basename(config.fixtureFile)}`,
-          idempotencyKey: `stripe:${config.account}:${listHash}`,
-          controlTotals: { transactionCount: list.data.length },
-          records: list.data.map((bt: unknown, index) => {
+          externalRef,
+          idempotencyKey,
+          controlTotals: { transactionCount: data.length },
+          records: data.map((bt: unknown, index) => {
             const candidate = (bt as { id?: unknown }) ?? {};
             return {
               sourceAccount: config.account,
