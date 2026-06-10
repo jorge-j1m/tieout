@@ -157,6 +157,79 @@ describe("ingestion services", () => {
     expect(versions[1]).toMatchObject({ version: 2, isCurrent: true, amountMinor: 2000n, supersededAt: null });
   });
 
+  it("renormalizing with a bumped version writes nothing when output is identical", async () => {
+    const { db } = client;
+    const { batchId } = await landBatch(
+      db,
+      batch("ledger:w1", [record("e1", { amountMinor: "1000" })]),
+      NOW,
+    );
+    await normalizeBatch(db, stubAdapter, batchId, NOW);
+
+    const v2: SourceAdapter = { ...stubAdapter, normalizerVersion: "stub-v2" };
+    const result = await normalizeBatch(db, v2, batchId, LATER);
+    expect(result).toMatchObject({ normalized: 0, unchanged: 1, superseded: 0, quarantined: 0 });
+
+    const txns = await db.select().from(transactions);
+    expect(txns).toHaveLength(1);
+    expect(txns[0]).toMatchObject({
+      version: 1,
+      isCurrent: true,
+      normalizerVersion: "stub-v1",
+      supersededAt: null,
+    });
+  });
+
+  it("renormalizing with changed output supersedes with a new version", async () => {
+    const { db } = client;
+    const { batchId } = await landBatch(
+      db,
+      batch("ledger:w1", [record("e1", { amountMinor: "1000" })]),
+      NOW,
+    );
+    await normalizeBatch(db, stubAdapter, batchId, NOW);
+
+    const v2Changed: SourceAdapter = {
+      ...stubAdapter,
+      normalizerVersion: "stub-v2",
+      normalize: (raw) => {
+        const r = stubAdapter.normalize(raw);
+        return r.ok ? { ok: true, txn: { ...r.txn, amountMinor: r.txn.amountMinor * 2n } } : r;
+      },
+    };
+    const result = await normalizeBatch(db, v2Changed, batchId, LATER);
+    expect(result).toMatchObject({ normalized: 1, unchanged: 0, superseded: 1 });
+
+    const versions = await db.select().from(transactions).orderBy(asc(transactions.version));
+    expect(versions).toHaveLength(2);
+    expect(versions[0]).toMatchObject({ version: 1, isCurrent: false, normalizerVersion: "stub-v1" });
+    expect(versions[1]).toMatchObject({
+      version: 2,
+      isCurrent: true,
+      amountMinor: 2000n,
+      normalizerVersion: "stub-v2",
+    });
+  });
+
+  it("a restated raw with identical canonical output still versions — the observation changed", async () => {
+    const { db } = client;
+    const w1 = await landBatch(
+      db,
+      batch("ledger:w1", [record("e1", { amountMinor: "1000" })]),
+      NOW,
+    );
+    await normalizeBatch(db, stubAdapter, w1.batchId, NOW);
+
+    // Different payload bytes, same canonical output (the stub ignores `note`).
+    const w2 = await landBatch(
+      db,
+      batch("ledger:w2", [record("e1", { amountMinor: "1000", note: "restated" })]),
+      LATER,
+    );
+    const result = await normalizeBatch(db, stubAdapter, w2.batchId, LATER);
+    expect(result).toMatchObject({ normalized: 1, superseded: 1, unchanged: 0 });
+  });
+
   it("cursors only move forward", async () => {
     const { db } = client;
     await advanceCursor(db, "stripe", "acct_main", LATER, NOW);
