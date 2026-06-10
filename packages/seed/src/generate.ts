@@ -1,7 +1,9 @@
 import { minorToDecimalString } from "@tieout/core";
+import type { BreakType } from "@tieout/contracts";
 import type {
   MercadiaDataset,
   PlantedBreak,
+  SeedExpectations,
   SeedLedgerEntry,
   SeedStripeBalanceTransaction,
 } from "./types.js";
@@ -186,7 +188,7 @@ export function generateMercadiaDataset(): MercadiaDataset {
     }),
   );
 
-  const manifest: PlantedBreak[] = [
+  const plantedBreaks: PlantedBreak[] = [
     {
       id: "planted-unbooked-stripe-fee",
       breakType: "missing_in_ledger",
@@ -217,5 +219,28 @@ export function generateMercadiaDataset(): MercadiaDataset {
     },
   ];
 
-  return { ledgerEntries, stripeBalanceTransactions, manifest };
+  // Expected totals, derived from the construction constants above — deliberately
+  // not from running the matcher, so tests against them stay a real cross-check.
+  const bookedRefunds =
+    Array.from({ length: ORDER_COUNT }, (_, i) => i).filter(isRefunded).length - 1;
+  const breaksByType: Partial<Record<BreakType, number>> = {};
+  for (const b of plantedBreaks) {
+    breaksByType[b.breakType] = (breaksByType[b.breakType] ?? 0) + 1;
+  }
+  const expected: SeedExpectations = {
+    ledgerRecords: ledgerEntries.length,
+    stripeRecords: stripeBalanceTransactions.length,
+    transactions: ledgerEntries.length + stripeBalanceTransactions.length,
+    matches: {
+      // Referenced charges pair in pass 2; so do the refunds booked on both sides.
+      exact_reference: ORDER_COUNT - MANUAL_BOOKING_ORDERS.size + bookedRefunds,
+      // The manual bookings carry no reference and pair through pass 3.
+      amount_date_window: MANUAL_BOOKING_ORDERS.size,
+      total: ORDER_COUNT + bookedRefunds,
+    },
+    breaksByType,
+    totalBreaks: plantedBreaks.length,
+  };
+
+  return { ledgerEntries, stripeBalanceTransactions, manifest: { plantedBreaks, expected } };
 }

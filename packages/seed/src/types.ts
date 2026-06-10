@@ -49,8 +49,29 @@ export interface PlantedBreak {
   reason: string;
 }
 
+/**
+ * Totals a full pipeline run over the dataset must produce. Derived from the
+ * generator's construction constants — never from running the matcher — so tests
+ * asserting against them are a real cross-check, not the matcher agreeing with itself.
+ */
+export interface SeedExpectations {
+  ledgerRecords: number;
+  stripeRecords: number;
+  /** Raw records and transactions after one clean run: every record, exactly once. */
+  transactions: number;
+  matches: { total: number; exact_reference: number; amount_date_window: number };
+  breaksByType: Partial<Record<BreakType, number>>;
+  totalBreaks: number;
+}
+
+/** The machine-readable acceptance contract (`data/manifest.json`) — the single source of truth for every count the tests and docs quote. */
+export interface SeedManifest {
+  plantedBreaks: PlantedBreak[];
+  expected: SeedExpectations;
+}
+
 export interface MercadiaDataset {
   ledgerEntries: SeedLedgerEntry[];
   stripeBalanceTransactions: SeedStripeBalanceTransaction[];
-  manifest: PlantedBreak[];
+  manifest: SeedManifest;
 }

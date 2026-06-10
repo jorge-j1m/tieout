@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { PlantedBreak } from "./types.js";
+import type { SeedManifest } from "./types.js";
 
 export * from "./types.js";
 export * from "./generate.js";
@@ -15,6 +15,7 @@ export const seedFiles = {
   manifest: path.join(seedDataDir, "manifest.json"),
 } as const;
 
-export function loadPlantedManifest(): PlantedBreak[] {
-  return JSON.parse(readFileSync(seedFiles.manifest, "utf8")) as PlantedBreak[];
+/** The committed acceptance contract: planted breaks + the expected totals every test and doc quotes. */
+export function loadSeedManifest(): SeedManifest {
+  return JSON.parse(readFileSync(seedFiles.manifest, "utf8")) as SeedManifest;
 }

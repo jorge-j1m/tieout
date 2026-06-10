@@ -15,7 +15,7 @@ import {
   transactions,
 } from "@tieout/db";
 import { connectTestDb, type TestDb } from "@tieout/db/testing";
-import { loadPlantedManifest, seedFiles, type SeedLedgerEntry } from "@tieout/seed";
+import { loadSeedManifest, seedFiles, type SeedLedgerEntry } from "@tieout/seed";
 import { createSeedAdapters } from "../pipeline/adapters.js";
 import { fullRecon, runRecon, type FullReconResult } from "../pipeline/pipeline.js";
 
@@ -78,13 +78,13 @@ describe("Stage 1 acceptance: full pipeline over the seed dataset", () => {
   });
 
   it("finds exactly the planted breaks — no more, no fewer", async () => {
-    const manifest = loadPlantedManifest();
+    const { plantedBreaks } = loadSeedManifest();
     const breakRows = await client.db
       .select()
       .from(breaks)
       .where(eq(breaks.runId, first.summary.runId));
-    expect(breakRows).toHaveLength(manifest.length);
-    for (const planted of manifest) {
+    expect(breakRows).toHaveLength(plantedBreaks.length);
+    for (const planted of plantedBreaks) {
       const found = breakRows.find(
         (b) =>
           b.type === planted.breakType &&
@@ -97,11 +97,22 @@ describe("Stage 1 acceptance: full pipeline over the seed dataset", () => {
   });
 
   it("quarantines nothing on clean seed data and matches everything else", async () => {
+    const { expected } = loadSeedManifest();
     expect(await client.db.select().from(quarantinedRecords)).toHaveLength(0);
-    // 40 charges + 3 booked refunds tie out; 3 of those matches come from the
-    // amount+date-window fallback (manual ledger bookings without references).
-    expect(first.summary.matches).toBe(43);
-    expect(first.summary.totalBreaks).toBe(4);
+    expect(first.summary.matches).toBe(expected.matches.total);
+    expect(first.summary.totalBreaks).toBe(expected.totalBreaks);
+    expect(first.summary.breaks).toMatchObject(expected.breaksByType);
+
+    const kindRows = await client.db
+      .select({ kind: matches.kind })
+      .from(matches)
+      .where(eq(matches.runId, first.summary.runId));
+    const byKind: Record<string, number> = {};
+    for (const row of kindRows) byKind[row.kind] = (byKind[row.kind] ?? 0) + 1;
+    expect(byKind).toEqual({
+      exact_reference: expected.matches.exact_reference,
+      amount_date_window: expected.matches.amount_date_window,
+    });
   });
 
   it("re-running ingestion creates zero duplicate raw or transaction rows", async () => {
@@ -117,10 +128,11 @@ describe("Stage 1 acceptance: full pipeline over the seed dataset", () => {
         expect(r.quarantined).toBe(0);
       }
     }
+    const { expected } = loadSeedManifest();
     const rawCount = await client.db.select().from(rawRecords);
     const txnCount = await client.db.select().from(transactions);
-    expect(rawCount).toHaveLength(90); // 45 ledger entries + 45 stripe balance txns
-    expect(txnCount).toHaveLength(90);
+    expect(rawCount).toHaveLength(expected.ledgerRecords + expected.stripeRecords);
+    expect(txnCount).toHaveLength(expected.transactions);
     expect(txnCount.every((t) => t.isCurrent && t.version === 1)).toBe(true);
   });
 
