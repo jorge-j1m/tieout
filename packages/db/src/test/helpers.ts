@@ -1,20 +1,8 @@
 import { sql } from "drizzle-orm";
-import { migrate } from "drizzle-orm/postgres-js/migrator";
-import { createDbClient, type Db, type DbClient } from "../client.js";
-import { optionalDatabaseUrl } from "../env.js";
-import { migrationsFolder } from "../migrations.js";
+import type { Db } from "../client.js";
 import { ingestionBatches, rawRecords } from "../schema.js";
 
-export const databaseUrl = optionalDatabaseUrl();
-
-/** db tests need live Postgres (docker compose up -d). Without DATABASE_URL they skip. */
-export const hasDatabase = databaseUrl !== undefined;
-
-export async function connectMigrated(): Promise<DbClient> {
-  const client = createDbClient(databaseUrl!);
-  await migrate(client.db, { migrationsFolder });
-  return client;
-}
+export { connectTestDb, type TestDb } from "../testing.js";
 
 export async function truncateAll(db: Db): Promise<void> {
   await db.execute(sql`

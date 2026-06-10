@@ -45,7 +45,7 @@ importers:
         version: 16.6.1
       drizzle-orm:
         specifier: ^0.44.0
-        version: 0.44.7(@opentelemetry/api@1.9.0)(postgres@3.4.9)
+        version: 0.44.7(@electric-sql/pglite@0.5.1)(@opentelemetry/api@1.9.0)(postgres@3.4.9)
     devDependencies:
       '@tieout/eslint-config':
         specifier: workspace:*
@@ -165,11 +165,14 @@ importers:
         version: 16.6.1
       drizzle-orm:
         specifier: ^0.44.0
-        version: 0.44.7(@opentelemetry/api@1.9.0)(postgres@3.4.9)
+        version: 0.44.7(@electric-sql/pglite@0.5.1)(@opentelemetry/api@1.9.0)(postgres@3.4.9)
       postgres:
         specifier: ^3.4.0
         version: 3.4.9
     devDependencies:
+      '@electric-sql/pglite':
+        specifier: ^0.5.1
+        version: 0.5.1
       '@tieout/eslint-config':
         specifier: workspace:*
         version: link:../eslint-config
@@ -349,6 +352,9 @@ packages:
 
   '@electric-sql/client@1.0.14':
     resolution: {integrity: sha512-LtPAfeMxXRiYS0hyDQ5hue2PjljUiK9stvzsVyVb4nwxWQxfOWTSF42bHTs/o5i3x1T4kAQ7mwHpxa4A+f8X7Q==}
+
+  '@electric-sql/pglite@0.5.1':
+    resolution: {integrity: sha512-h2Vc+qkQqsEL5kvyN5nBAxn3Vbyvka7QfDW7Io+CdcwU1+X8JbCAN2og+5dI11S3eJuDfroUCxzJaap6k+ezEw==}
 
   '@esbuild-kit/core-utils@3.3.2':
     resolution: {integrity: sha512-sPRAnw9CdSsRmEtnsl2WXWdyquogVpB3yZ3dgwJfe8zrOzTsV7cJvmwrKVa+0ma5BoiGJ+BoqkMvawbayKUsqQ==}
@@ -3483,6 +3489,8 @@ snapshots:
     optionalDependencies:
       '@rollup/rollup-darwin-arm64': 4.61.1
 
+  '@electric-sql/pglite@0.5.1': {}
+
   '@esbuild-kit/core-utils@3.3.2':
     dependencies:
       esbuild: 0.18.20
@@ -4790,8 +4798,9 @@ snapshots:
       esbuild: 0.25.12
       tsx: 4.22.4
 
-  drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(postgres@3.4.9):
+  drizzle-orm@0.44.7(@electric-sql/pglite@0.5.1)(@opentelemetry/api@1.9.0)(postgres@3.4.9):
     optionalDependencies:
+      '@electric-sql/pglite': 0.5.1
       '@opentelemetry/api': 1.9.0
       postgres: 3.4.9
 

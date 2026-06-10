@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
   },
   "scripts": {
     "db:generate": "drizzle-kit generate",
@@ -22,6 +23,7 @@
     "postgres": "^3.4.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.1",
     "@tieout/eslint-config": "workspace:*",
     "@tieout/typescript-config": "workspace:*",
     "@types/node": "^22.0.0",

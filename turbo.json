@@ -3,6 +3,7 @@
   "ui": "tui",
   "globalEnv": [
     "DATABASE_URL",
+    "TEST_DATABASE_URL",
     "SLACK_WEBHOOK_URL",
     "TRIGGER_SECRET_KEY",
     "TRIGGER_PROJECT_REF",

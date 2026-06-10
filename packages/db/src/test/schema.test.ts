@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { DbClient } from "../client.js";
 import { matches, matchMembers, rawRecords, reconRuns, transactions } from "../schema.js";
-import { connectMigrated, hasDatabase, insertFixtureRaw, truncateAll } from "./helpers.js";
+import { connectTestDb, insertFixtureRaw, truncateAll, type TestDb } from "./helpers.js";
 
 const OBSERVED = new Date("2026-06-01T00:00:00Z");
 
@@ -43,14 +42,14 @@ function txnRow(
   };
 }
 
-describe.skipIf(!hasDatabase)("schema constraints are correctness features", () => {
-  let client: DbClient;
+describe("schema constraints are correctness features", () => {
+  let client: TestDb;
 
   beforeAll(async () => {
-    client = await connectMigrated();
+    client = await connectTestDb();
   });
   afterAll(async () => {
-    await client.sql.end();
+    await client.close();
   });
   beforeEach(async () => {
     await truncateAll(client.db);

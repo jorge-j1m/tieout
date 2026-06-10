@@ -35,6 +35,21 @@ jobs:
       - run: pnpm db:migrate
       - run: pnpm turbo run typecheck lint test
 
+  # The zero-infra path: no service, no DATABASE_URL — db suites run on in-memory
+  # PGlite (D28). Protects the fresh-clone experience the same way `verify`
+  # protects engine fidelity.
+  verify-zero-infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run test
+
   gitleaks:
     runs-on: ubuntu-latest
     steps:

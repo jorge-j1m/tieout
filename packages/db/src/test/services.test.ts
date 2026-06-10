@@ -1,12 +1,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { LandedBatch, LandedRecord, SourceAdapter } from "@tieout/contracts";
 import { eq, and, asc } from "drizzle-orm";
-import type { DbClient } from "../client.js";
 import { quarantinedRecords, rawRecords, sourceCursors, transactions } from "../schema.js";
 import { advanceCursor } from "../services/cursors.js";
 import { landBatch } from "../services/ingest.js";
 import { normalizeBatch } from "../services/normalize.js";
-import { connectMigrated, hasDatabase, truncateAll } from "./helpers.js";
+import { connectTestDb, truncateAll, type TestDb } from "./helpers.js";
 
 const NOW = new Date("2026-06-01T00:00:00Z");
 const LATER = new Date("2026-06-02T00:00:00Z");
@@ -62,14 +61,14 @@ const stubAdapter: SourceAdapter = {
   },
 };
 
-describe.skipIf(!hasDatabase)("ingestion services", () => {
-  let client: DbClient;
+describe("ingestion services", () => {
+  let client: TestDb;
 
   beforeAll(async () => {
-    client = await connectMigrated();
+    client = await connectTestDb();
   });
   afterAll(async () => {
-    await client.sql.end();
+    await client.close();
   });
   beforeEach(async () => {
     await truncateAll(client.db);

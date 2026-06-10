@@ -1,27 +1,22 @@
 import "../env.js";
-import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { eq, sql as dsql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { BreakTxnDetail } from "@tieout/core";
 import {
   breaks,
-  createDbClient,
   matchMembers,
   matches,
-  migrationsFolder,
   quarantinedRecords,
   rawRecords,
   transactions,
-  type DbClient,
 } from "@tieout/db";
+import { connectTestDb, type TestDb } from "@tieout/db/testing";
 import { loadPlantedManifest } from "@tieout/seed";
 import { createSeedAdapters } from "../pipeline/adapters.js";
 import { fullRecon, type FullReconResult } from "../pipeline/pipeline.js";
 
-const hasDatabase = process.env.DATABASE_URL !== undefined;
-
 /** Order-independent fingerprints of a run's matches and breaks, for run-vs-run comparison. */
-async function runFingerprint(client: DbClient, runId: string) {
+async function runFingerprint(client: TestDb, runId: string) {
   const memberRows = await client.db
     .select({
       matchId: matchMembers.matchId,
@@ -54,14 +49,13 @@ async function runFingerprint(client: DbClient, runId: string) {
   return { matchSigs, breakSigs };
 }
 
-describe.skipIf(!hasDatabase)("Stage 1 acceptance: full pipeline over the seed dataset", () => {
-  let client: DbClient;
+describe("Stage 1 acceptance: full pipeline over the seed dataset", () => {
+  let client: TestDb;
   let first: FullReconResult;
   let second: FullReconResult;
 
   beforeAll(async () => {
-    client = createDbClient(process.env.DATABASE_URL!);
-    await migrate(client.db, { migrationsFolder });
+    client = await connectTestDb();
     await client.db.execute(dsql`
       TRUNCATE TABLE match_members, matches, breaks, recon_runs,
         quarantined_records, transactions, raw_records, ingestion_batches, source_cursors
@@ -76,7 +70,7 @@ describe.skipIf(!hasDatabase)("Stage 1 acceptance: full pipeline over the seed d
   });
 
   afterAll(async () => {
-    await client.sql.end();
+    await client.close();
   });
 
   it("finds exactly the planted breaks — no more, no fewer", async () => {
@@ -135,4 +129,5 @@ describe.skipIf(!hasDatabase)("Stage 1 acceptance: full pipeline over the seed d
     const b = await runFingerprint(client, second.summary.runId);
     expect(b).toEqual(a);
   });
+
 });
