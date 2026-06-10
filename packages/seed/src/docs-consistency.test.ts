@@ -23,7 +23,7 @@ describe("docs quote the manifest's numbers", () => {
   it("how-it-works.md §7 sample output matches the manifest", () => {
     const text = doc("docs/how-it-works.md");
     expect(captured(text, /^\s+matches:\s+(\d+) \((\d+) transactions\)$/m, "how-it-works §7")).toEqual(
-      [expected.matches.total, expected.matches.total * 2],
+      [expected.matches.total, expected.matchedTransactions],
     );
     expect(captured(text, /^\s+breaks:\s+(\d+)$/m, "how-it-works §7")).toEqual([
       expected.totalBreaks,

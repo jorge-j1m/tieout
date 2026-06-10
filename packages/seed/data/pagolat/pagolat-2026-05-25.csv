@@ -1,0 +1,6 @@
+PAGOLAT;SETTLEMENT;v1;mx-merchant-014;2026-05-25;-06:00
+HEADER;opening_balance;5000,00
+LINE;2026-05-25 10:00:00;sale;plord_20260525_1;1000,00;25,00;975,00;Venta tienda MX
+LINE;2026-05-25 11:00:00;sale;plord_20260525_2;500,00;25,00;475,00;Venta tienda MX
+LINE;2026-05-25 16:00:00;sale;plord_20260525_err;1500,00;50,00;1450,00;Venta duplicada por error de PagoLat
+FOOTER;line_count;3;total_net;2900,00;closing_balance;7900,00

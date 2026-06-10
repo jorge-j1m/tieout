@@ -38,7 +38,7 @@ pnpm seed                     # Mercadia dataset with planted breaks
 pnpm recon                    # land → normalize → reconcile (no accounts needed)
 ```
 
-The run reports **54 matches and exactly 7 breaks** — the ones planted in the seed data
+The run reports **58 matches and exactly 9 breaks** — the ones planted in the seed data
 (see `packages/seed/README.md`). Run `pnpm recon` again: identical matches, identical
 breaks, zero duplicate rows ingested. That determinism is the product.
 

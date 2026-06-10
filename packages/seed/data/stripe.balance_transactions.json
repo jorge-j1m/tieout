@@ -1224,6 +1224,38 @@
       "source": "ch_mercadia_cl_e1",
       "status": "available",
       "type": "charge"
+    },
+    {
+      "id": "txn_po_mercadia_0001",
+      "object": "balance_transaction",
+      "amount": -250000,
+      "currency": "usd",
+      "created": 1779897600,
+      "available_on": 1779897600,
+      "description": "STRIPE PAYOUT",
+      "fee": 0,
+      "fee_details": [],
+      "net": -250000,
+      "reporting_category": "payout",
+      "source": "po_mercadia_0001",
+      "status": "available",
+      "type": "payout"
+    },
+    {
+      "id": "txn_po_mercadia_0002",
+      "object": "balance_transaction",
+      "amount": -180000,
+      "currency": "usd",
+      "created": 1779984000,
+      "available_on": 1779984000,
+      "description": "STRIPE PAYOUT",
+      "fee": 0,
+      "fee_details": [],
+      "net": -180000,
+      "reporting_category": "payout",
+      "source": "po_mercadia_0002",
+      "status": "available",
+      "type": "payout"
     }
   ],
   "has_more": false,

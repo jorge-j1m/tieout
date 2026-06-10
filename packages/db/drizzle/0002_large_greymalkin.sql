@@ -1,0 +1,1 @@
+ALTER TABLE "ingestion_batches" ADD COLUMN "seq" bigserial NOT NULL;

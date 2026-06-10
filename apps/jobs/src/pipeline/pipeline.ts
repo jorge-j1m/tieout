@@ -5,9 +5,12 @@ import {
   advanceCursor,
   currentWatermark,
   landBatch,
+  loadFxRatesAsOf,
   loadTransactionsAsOf,
   normalizeBatch,
   persistReconRun,
+  syncExceptionsForRun,
+  upsertFxRates,
   type Db,
   type LandResult,
   type NormalizeBatchResult,
@@ -15,6 +18,10 @@ import {
 
 /** Fallback matching window: occurredAt within ±2 days. */
 export const DEFAULT_MATCH_WINDOW_MS = 2 * 86_400_000;
+/** Reference-less double-post heuristic window (D29h). */
+export const DEFAULT_DUPLICATE_WINDOW_MS = 3_600_000;
+/** Cross-currency drift tolerance when rates are configured (D29a). */
+export const DEFAULT_FX_TOLERANCE_BPS = 10;
 
 export interface Window {
   from: Date;
@@ -98,13 +105,18 @@ export async function runRecon(db: Db, opts: ReconOptions): Promise<ReconSummary
   const ledger = live.filter((t) => t.source === "ledger").map(toMatchable);
   const external = live.filter((t) => t.source !== "ledger").map(toMatchable);
 
+  // The run's rate set comes from the fx_rates table unless the caller injected
+  // one — either way the matcher records what it applied (D29d).
+  const fxRates = opts.fx?.rates ?? (await loadFxRatesAsOf(db, asOf));
   const config: MatchingConfig = {
     windowMs: opts.windowMs ?? DEFAULT_MATCH_WINDOW_MS,
     asOf,
     ...(opts.toleranceMinor !== undefined ? { toleranceMinor: opts.toleranceMinor } : {}),
-    ...(opts.fx !== undefined ? { fx: opts.fx } : {}),
+    ...(fxRates.length > 0
+      ? { fx: { rates: fxRates, toleranceBps: opts.fx?.toleranceBps ?? DEFAULT_FX_TOLERANCE_BPS } }
+      : {}),
     ...(opts.lagMsBySource !== undefined ? { lagMsBySource: opts.lagMsBySource } : {}),
-    ...(opts.duplicateWindowMs !== undefined ? { duplicateWindowMs: opts.duplicateWindowMs } : {}),
+    duplicateWindowMs: opts.duplicateWindowMs ?? DEFAULT_DUPLICATE_WINDOW_MS,
   };
   const { matches, breaks, pending } = reconcile(ledger, external, config);
 
@@ -135,12 +147,16 @@ export async function runRecon(db: Db, opts: ReconOptions): Promise<ReconSummary
         windowMs: config.windowMs,
         toleranceMinor: (config.toleranceMinor ?? 0n).toString(),
         fxToleranceBps: config.fx?.toleranceBps ?? null,
+        fxRates: config.fx?.rates ?? [],
         lagMsBySource: config.lagMsBySource ?? null,
         duplicateWindowMs: config.duplicateWindowMs ?? null,
       },
     },
     now: opts.now,
   });
+  // Every run feeds the worklist: new breaks open exceptions, vanished ones
+  // self-resolve, recurring resolved ones reopen (D18).
+  await syncExceptionsForRun(db, runId, opts.now);
 
   return {
     runId,
@@ -161,15 +177,19 @@ export interface FullReconResult {
 }
 
 /**
- * The whole Stage 1 story in one call: land both sources, normalize, reconcile.
- * Used by the CLI and the integration test; the Trigger.dev tasks run the same
- * steps as separate, individually idempotent units.
+ * The whole pipeline story in one call: seed the run's fx rates, land every
+ * source, normalize (quarantined units excluded — there is nothing to trust in
+ * them), reconcile. Used by the CLI and the integration test; the Trigger.dev
+ * tasks run the same steps as separate, individually idempotent units.
  */
 export async function fullRecon(
   db: Db,
   adapters: Record<string, SourceAdapter>,
-  opts: { now: Date; window?: Window },
+  opts: { now: Date; window?: Window; fxRates?: FxRateInput[]; lagMsBySource?: Record<string, number> },
 ): Promise<FullReconResult> {
+  if (opts.fxRates !== undefined) {
+    await upsertFxRates(db, opts.fxRates);
+  }
   const window = opts.window ?? { from: new Date(0), to: opts.now };
   const landed: Record<string, LandResult[]> = {};
   const normalized: Record<string, NormalizeBatchResult[]> = {};
@@ -179,11 +199,14 @@ export async function fullRecon(
     normalized[adapter.source] = await normalizeBatches(
       db,
       adapter,
-      results.map((r) => r.batchId),
+      results.filter((r) => !r.batchQuarantined).map((r) => r.batchId),
       opts.now,
     );
   }
-  const summary = await runRecon(db, { now: opts.now });
+  const summary = await runRecon(db, {
+    now: opts.now,
+    ...(opts.lagMsBySource !== undefined ? { lagMsBySource: opts.lagMsBySource } : {}),
+  });
   return { landed, normalized, summary };
 }
 
@@ -196,12 +219,16 @@ export function formatSummary(result: FullReconResult): string {
   for (const [source, results] of Object.entries(result.landed)) {
     const inserted = results.reduce((n, r) => n + r.rawInserted, 0);
     const skipped = results.reduce((n, r) => n + r.rawSkipped, 0);
+    const tombstoned = results.reduce((n, r) => n + r.tombstoned, 0);
+    const unitsQuarantined = results.filter((r) => r.batchQuarantined).length;
     const norms = result.normalized[source] ?? [];
     const normalized = norms.reduce((n, r) => n + r.normalized, 0);
     const quarantined = norms.reduce((n, r) => n + r.quarantined, 0);
     lines.push(
       `  ${source}: ${results.length} batch(es), ${inserted} raw inserted, ${skipped} unchanged, ` +
-        `${normalized} normalized, ${quarantined} quarantined`,
+        `${normalized} normalized, ${quarantined} quarantined` +
+        (tombstoned > 0 ? `, ${tombstoned} tombstoned` : "") +
+        (unitsQuarantined > 0 ? `, ${unitsQuarantined} unit(s) quarantined whole` : ""),
     );
   }
   lines.push(`  matches:  ${summary.matches} (${summary.matchedTransactions} transactions)`);

@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   bigint,
+  bigserial,
   boolean,
   date,
   index,
@@ -53,6 +54,8 @@ export const ingestionBatches = pgTable(
   "ingestion_batches",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    /** Monotonic landing order — what "the unit's latest delivery" means (D8). */
+    seq: bigserial("seq", { mode: "number" }).notNull(),
     source: text("source").notNull(),
     connection: text("connection").notNull(),
     kind: batchKind("kind").notNull(),

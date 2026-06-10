@@ -1,0 +1,5 @@
+PAGOLAT;SETTLEMENT;v1;mx-merchant-014;2026-05-24;-06:00
+HEADER;opening_balance;5000,00
+LINE;2026-05-24 10:00:00;sale;plord_20260524_1;1000,00;25,00;975,00;Venta tienda MX
+LINE;2026-05-24 11:00:00;sale;plord_20260524_2;500,00;25,00;475,00;Venta tienda MX
+FOOTER;line_count;2;total_net;2000,00;closing_balance;7000,00

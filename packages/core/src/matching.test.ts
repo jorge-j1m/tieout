@@ -400,6 +400,32 @@ describe("reconcile — grouped settlement (N:1, net basis)", () => {
     });
   });
 
+  it("a cross-currency mismatch explained exactly by fee members is unexpected_fee, not fx_drift", () => {
+    const parts = [
+      line("p1", 100_000n, 97_500n, { currency: "MXN" }),
+      line("p_fee", -25_000n, -25_000n, { currency: "MXN", type: "fee", sourceId: "pl_fee" }),
+    ];
+    // The booking expects convert(97,500) = 5,733; the fee drags the group to
+    // convert(72,500) = 4,263 — residual = convert(25,000) exactly.
+    const { matches, breaks } = reconcile(
+      [anchor(5_733n)],
+      parts,
+      {
+        ...CONFIG,
+        fx: {
+          rates: [{ base: "MXN", quote: "USD", rate: "0.0588", rateSource: "test", rateDate: "2026-05-21" }],
+          toleranceBps: 10,
+        },
+      },
+    );
+    expect(matches).toEqual([]);
+    expect(breaks).toHaveLength(1);
+    expect(breaks[0]).toMatchObject({
+      type: "unexpected_fee",
+      details: { feeNetMinor: "-1470", fees: [expect.objectContaining({ id: "p_fee" })] },
+    });
+  });
+
   it("cross-currency drift beyond the bps tolerance is fx_drift, not amount_mismatch", () => {
     const parts = [line("p1", 100_000n, 97_000n, { currency: "MXN" })];
     // 970.00 MXN at 0.0588 = 57.04 USD; booked 58.00 → ~168 bps off.

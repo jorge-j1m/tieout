@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseDecimalToMinor } from "@tieout/core";
 import { generateMercadiaDataset } from "./generate.js";
-import { seedFiles } from "./index.js";
+import { pagolatDataDir, seedFiles } from "./index.js";
 
 describe("Mercadia dataset", () => {
   it("is deterministic: two generations are identical", () => {
@@ -39,11 +40,13 @@ describe("Mercadia dataset", () => {
     const { plantedBreaks } = generateMercadiaDataset().manifest;
     expect(plantedBreaks.map((b) => b.breakType).sort()).toEqual([
       "duplicate_candidate",
+      "duplicate_candidate",
+      "fx_drift",
       "missing_in_ledger",
       "missing_in_ledger",
       "missing_in_source",
       "missing_in_source",
-      "missing_in_source",
+      "unexpected_fee",
       "unexpected_fee",
     ]);
     const planted = new Set(plantedBreaks.map((b) => b.sourceId));
@@ -55,16 +58,35 @@ describe("Mercadia dataset", () => {
     const { expected } = manifest;
     expect(expected.ledgerRecords).toBe(ledgerEntries.length);
     expect(expected.stripeRecords).toBe(stripeBalanceTransactions.length);
-    expect(expected.transactions).toBe(ledgerEntries.length + stripeBalanceTransactions.length);
+    expect(expected.transactions).toBe(
+      ledgerEntries.length + stripeBalanceTransactions.length + expected.pagolatRecords,
+    );
+    expect(expected.currentTransactions).toBe(expected.transactions - 1);
     expect(expected.matches.total).toBe(
-      expected.matches.exact_reference + expected.matches.amount_date_window,
+      expected.matches.exact_reference +
+        expected.matches.amount_date_window +
+        expected.matches.grouped_reference,
     );
     expect(expected.totalBreaks).toBe(manifest.plantedBreaks.length);
-    // Partition: every record is half of a match or consumed by a break
-    // (amount_mismatch breaks consume two records, all other types one).
-    const consumedByBreaks =
-      expected.totalBreaks + (expected.breaksByType.amount_mismatch ?? 0);
-    expect(expected.matches.total * 2 + consumedByBreaks).toBe(expected.transactions);
+    // Partition: every matchable transaction (current, not tombstoned) is consumed
+    // by exactly one match or one break.
+    const matchable = expected.currentTransactions - expected.tombstonedTransactions;
+    expect(expected.matchedTransactions + expected.breakConsumedTransactions).toBe(matchable);
+  });
+
+  it("pagolat day-files parse losslessly and the restated file follows its original", () => {
+    const { pagolatFiles } = generateMercadiaDataset();
+    expect(pagolatFiles.map((f) => f.fileName).sort()).toEqual(
+      pagolatFiles.map((f) => f.fileName).slice().sort(),
+    );
+    const names = pagolatFiles.map((f) => f.fileName);
+    expect(names.indexOf("pagolat-2026-05-25.csv")).toBeLessThan(
+      names.indexOf("pagolat-2026-05-25.restated.csv"),
+    );
+    for (const file of pagolatFiles) {
+      expect(file.content).toMatch(/^PAGOLAT;SETTLEMENT;v1;/);
+      expect(file.content).toContain("FOOTER;line_count;");
+    }
   });
 
   it("committed data files match the generator (re-run `pnpm seed` after changing it)", () => {
@@ -75,6 +97,10 @@ describe("Mercadia dataset", () => {
     expect(JSON.parse(readFileSync(seedFiles.stripeBalanceTransactions, "utf8")).data).toEqual(
       dataset.stripeBalanceTransactions,
     );
+    expect(JSON.parse(readFileSync(seedFiles.fxRates, "utf8"))).toEqual(dataset.fxRates);
     expect(JSON.parse(readFileSync(seedFiles.manifest, "utf8"))).toEqual(dataset.manifest);
+    for (const file of dataset.pagolatFiles) {
+      expect(readFileSync(path.join(pagolatDataDir, file.fileName), "utf8")).toBe(file.content);
+    }
   });
 });

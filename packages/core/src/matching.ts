@@ -332,17 +332,25 @@ export function reconcile(
 
     consumeAll();
     const allTxns = [txnDetail(anchor), ...parts.map(txnDetail)];
-    if (drift) {
-      breaks.push({
-        type: "fx_drift",
-        details: { ...groupDetails, deltaMinor: delta.toString(), txns: allTxns },
-      });
-      continue;
-    }
+
     // A mismatch explained exactly by fee-type members the booking ignored is a
-    // sharper finding than "the numbers differ": name the fees.
+    // sharper finding than "the numbers differ" or "the rate is off": name the
+    // fees. Fee subtotals convert with the same run rate; when rounding makes the
+    // explanation inexact, the generic break stands — never an approximate claim.
     const feeParts = parts.filter((p) => p.type === "fee");
-    const feeSum = feeParts.reduce((n, p) => n + p.netMinor, 0n);
+    let feeSum = 0n;
+    const feeSubtotals = new Map<string, bigint>();
+    for (const p of feeParts) {
+      feeSubtotals.set(p.currency, (feeSubtotals.get(p.currency) ?? 0n) + p.netMinor);
+    }
+    for (const [currency, subtotal] of [...feeSubtotals.entries()].sort(([a], [b]) =>
+      compareStrings(a, b),
+    )) {
+      feeSum +=
+        currency === anchor.currency
+          ? subtotal
+          : convertMinor(subtotal, currency, anchor.currency, rateBook.get(currency, anchor.currency).parsed);
+    }
     if (feeParts.length > 0 && anchor.netMinor - sum === -feeSum) {
       breaks.push({
         type: "unexpected_fee",
@@ -352,6 +360,11 @@ export function reconcile(
           fees: feeParts.map(txnDetail),
           txns: allTxns,
         },
+      });
+    } else if (drift) {
+      breaks.push({
+        type: "fx_drift",
+        details: { ...groupDetails, deltaMinor: delta.toString(), txns: allTxns },
       });
     } else {
       breaks.push({

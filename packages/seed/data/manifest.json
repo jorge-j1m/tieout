@@ -44,27 +44,49 @@
     },
     {
       "id": "planted-referenceless-double-post",
-      "breakType": "missing_in_source",
+      "breakType": "duplicate_candidate",
       "source": "ledger",
       "sourceId": "LED-2026-CLE2",
-      "reason": "True double-post without a reference: one copy pairs and this one reads missing — flips to duplicate_candidate when the pipeline wires the duplicate heuristic"
+      "reason": "True double-post without a reference: one copy pairs through the fallback; the duplicate heuristic names this survivor a duplicate of its matched twin"
+    },
+    {
+      "id": "planted-unexpected-platform-fee",
+      "breakType": "unexpected_fee",
+      "source": "ledger",
+      "sourceId": "LED-2026-PL22",
+      "reason": "PagoLat charged a quarterly platform fee inside the 05-22 settlement; the booking ignored it — the group mismatch is explained exactly by the fee line"
+    },
+    {
+      "id": "planted-fx-drift",
+      "breakType": "fx_drift",
+      "source": "ledger",
+      "sourceId": "LED-2026-PL23",
+      "reason": "The 05-23 settlement was booked at 0.0612 but the run's recorded rate is 0.0588 — the legs disagree beyond tolerance and the rate is the suspect"
     }
   ],
   "expected": {
-    "ledgerRecords": 58,
-    "stripeRecords": 57,
-    "transactions": 115,
+    "ledgerRecords": 64,
+    "stripeRecords": 59,
+    "pagolatRecords": 12,
+    "transactions": 135,
+    "currentTransactions": 134,
+    "tombstonedTransactions": 1,
+    "quarantinedBatches": 1,
     "matches": {
-      "exact_reference": 44,
+      "exact_reference": 46,
       "amount_date_window": 10,
-      "total": 54
+      "grouped_reference": 2,
+      "total": 58
     },
+    "matchedTransactions": 119,
     "breaksByType": {
-      "unexpected_fee": 1,
+      "unexpected_fee": 2,
       "missing_in_ledger": 2,
-      "missing_in_source": 3,
-      "duplicate_candidate": 1
+      "missing_in_source": 2,
+      "duplicate_candidate": 2,
+      "fx_drift": 1
     },
-    "totalBreaks": 7
+    "totalBreaks": 9,
+    "breakConsumedTransactions": 14
   }
 }

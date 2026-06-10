@@ -20,11 +20,11 @@ cp .env.example .env            # set the local passwords
 docker compose up -d            # postgres + minio (127.0.0.1 only)
 pnpm db:migrate
 pnpm seed                       # materialize the Mercadia dataset
-pnpm recon                      # full pipeline; expect 54 matches, 7 breaks
+pnpm recon                      # full pipeline; expect 58 matches, 9 breaks
 turbo run typecheck lint test   # the definition of done — must be green
 ```
 
-If `pnpm recon` reports anything other than 54 matches / 7 breaks on a fresh clone,
+If `pnpm recon` reports anything other than 58 matches / 9 breaks on a fresh clone,
 stop and fix that before changing anything — the demo dataset is the living acceptance
 test.
 
@@ -218,7 +218,7 @@ You almost never touch stored rows. Decision tree:
 1. `turbo run typecheck lint test` green. With docker up, the db suites run on real
    Postgres 17 (same engine as CI); without it they run on in-memory PGlite — either
    way they run, never skip.
-2. `pnpm recon` twice → identical summaries, and the expected breaks (7, unless you
+2. `pnpm recon` twice → identical summaries, and the expected breaks (9, unless you
    changed the dataset on purpose).
 3. Behavior changes carry a test at the right layer: property test in `core`, golden
    file in `adapters`, rejection test for new constraints in `db`, count/shape update

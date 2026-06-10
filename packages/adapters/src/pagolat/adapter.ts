@@ -252,18 +252,22 @@ export function createPagolatAdapter(config: PagolatAdapterConfig): SourceAdapte
 
         const file = parseFile(content, fileName);
         const settlementKey = pagolatSettlementKey(file.account, file.date);
+        const unitKey = `pagolat:${file.account}:${file.date}`;
         const integrity = verifyControlTotals(file);
 
         // Occurrence index per identical line content (D10): legitimate duplicate
-        // lines stay distinct records instead of collapsing into one.
+        // lines stay distinct records instead of collapsing into one. The id's
+        // file-identity component is the UNIT key, not the content hash — a
+        // restated file must re-identify its surviving lines, or every
+        // restatement would tombstone the whole unit and re-create it.
         const occurrence = new Map<string, number>();
         batches.push({
           source: PAGOLAT_SOURCE,
           connection: config.connection ?? "sftp-drop",
           kind: "file",
           externalRef: fileName,
-          idempotencyKey: `pagolat:${file.account}:${file.date}:${fileHash}`,
-          completeUnit: { key: `pagolat:${file.account}:${file.date}` },
+          idempotencyKey: `${unitKey}:${fileHash}`,
+          completeUnit: { key: unitKey },
           controlTotals: {
             lineCount: file.declaredCount,
             totalNet: file.declaredTotalNet,
@@ -277,7 +281,7 @@ export function createPagolatAdapter(config: PagolatAdapterConfig): SourceAdapte
             occurrence.set(line, seen + 1);
             return {
               sourceAccount: file.account,
-              sourceId: syntheticSourceId(fileHash, line, seen),
+              sourceId: syntheticSourceId(unitKey, line, seen),
               payload: { line, offset: file.offset, settlementKey },
             };
           }),

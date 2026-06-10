@@ -1,0 +1,9 @@
+[
+  {
+    "base": "MXN",
+    "quote": "USD",
+    "rate": "0.0588",
+    "rateSource": "seed-desk",
+    "rateDate": "2026-05-20"
+  }
+]

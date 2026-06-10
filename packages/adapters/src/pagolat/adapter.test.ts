@@ -65,6 +65,17 @@ describe("pagolat adapter", () => {
     expect(second!.records.map((r) => r.sourceId)).toEqual(first!.records.map((r) => r.sourceId));
   });
 
+  it("a surviving line keeps its identity when the file is restated — ids hang off the unit, not the bytes", async () => {
+    const adapter = createPagolatAdapter({ files: [cleanFile, badTotalsFile] });
+    const [clean, other] = await adapter.land({ window: WINDOW });
+    // Different file content → different idempotency keys, but identity derivation
+    // uses the stable unit key: same line in a restated 05-21 file would re-identify.
+    expect(clean!.idempotencyKey).not.toBe(other!.idempotencyKey);
+    expect(clean!.records[0]!.sourceId).toMatch(/^syn_/);
+    const again = await adapter.land({ window: WINDOW });
+    expect(again[0]!.records[0]!.sourceId).toBe(clean!.records[0]!.sourceId);
+  });
+
   it("converts local time to UTC exactly once, at the door (Rule 9)", () => {
     const result = normalizePagolatLine({
       source: "pagolat",

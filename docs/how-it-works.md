@@ -356,14 +356,16 @@ The demo's actual output:
 recon run 7e9b0611-…
   as of:    2026-06-05T00:00:00.000Z
   ruleset:  ruleset-v2
-  ledger: 1 batch(es), 0 raw inserted, 58 unchanged, 0 normalized, 0 quarantined
-  stripe: 1 batch(es), 0 raw inserted, 57 unchanged, 0 normalized, 0 quarantined
-  matches:  54 (108 transactions)
-  breaks:   7
+  ledger: 1 batch(es), 0 raw inserted, 64 unchanged, 0 normalized, 0 quarantined
+  stripe: 1 batch(es), 0 raw inserted, 59 unchanged, 0 normalized, 0 quarantined
+  pagolat: 6 batch(es), 0 raw inserted, 13 unchanged, 0 normalized, 0 quarantined, 1 unit(s) quarantined whole
+  matches:  58 (119 transactions)
+  breaks:   9
     - missing_in_ledger: 2
-    - missing_in_source: 3
-    - duplicate_candidate: 1
-    - unexpected_fee: 1
+    - missing_in_source: 2
+    - duplicate_candidate: 2
+    - unexpected_fee: 2
+    - fx_drift: 1
 ```
 
 But the summary is just the receipt. The real output is the permanent record in

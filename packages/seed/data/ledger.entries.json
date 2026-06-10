@@ -694,5 +694,77 @@
     "status": "posted",
     "reference": null,
     "description": "Customer payment — order #2012 (manual booking, keyed twice in error)"
+  },
+  {
+    "entryId": "LED-2026-PL21",
+    "account": "mercadia:operating",
+    "amount": "170.52",
+    "currency": "USD",
+    "bookedAt": "2026-05-22T09:00:00.000Z",
+    "valueDate": "2026-05-22",
+    "type": "payment",
+    "status": "posted",
+    "reference": "PL-mx-merchant-014-2026-05-21",
+    "description": "PagoLat settlement 2026-05-21 (desk rate 0.0588)"
+  },
+  {
+    "entryId": "LED-2026-PL22",
+    "account": "mercadia:operating",
+    "amount": "199.92",
+    "currency": "USD",
+    "bookedAt": "2026-05-23T09:00:00.000Z",
+    "valueDate": "2026-05-23",
+    "type": "payment",
+    "status": "posted",
+    "reference": "PL-mx-merchant-014-2026-05-22",
+    "description": "PagoLat settlement 2026-05-22 (desk rate 0.0588)"
+  },
+  {
+    "entryId": "LED-2026-PL23",
+    "account": "mercadia:operating",
+    "amount": "148.41",
+    "currency": "USD",
+    "bookedAt": "2026-05-24T09:00:00.000Z",
+    "valueDate": "2026-05-24",
+    "type": "payment",
+    "status": "posted",
+    "reference": "PL-mx-merchant-014-2026-05-23",
+    "description": "PagoLat settlement 2026-05-23 (desk rate 0.0588)"
+  },
+  {
+    "entryId": "LED-2026-PL25",
+    "account": "mercadia:operating",
+    "amount": "85.26",
+    "currency": "USD",
+    "bookedAt": "2026-05-26T09:00:00.000Z",
+    "valueDate": "2026-05-26",
+    "type": "payment",
+    "status": "posted",
+    "reference": "PL-mx-merchant-014-2026-05-25",
+    "description": "PagoLat settlement 2026-05-25 (desk rate 0.0588)"
+  },
+  {
+    "entryId": "LED-2026-PO01",
+    "account": "mercadia:operating",
+    "amount": "2500.00",
+    "currency": "USD",
+    "bookedAt": "2026-05-27T20:00:00.000Z",
+    "valueDate": "2026-05-27",
+    "type": "payout",
+    "status": "posted",
+    "reference": "po_mercadia_0001",
+    "description": "Stripe payout received — po_mercadia_0001"
+  },
+  {
+    "entryId": "LED-2026-PO02",
+    "account": "mercadia:operating",
+    "amount": "1800.00",
+    "currency": "USD",
+    "bookedAt": "2026-05-28T20:00:00.000Z",
+    "valueDate": "2026-05-28",
+    "type": "payout",
+    "status": "posted",
+    "reference": "po_mercadia_0002",
+    "description": "Stripe payout received — po_mercadia_0002"
   }
 ]

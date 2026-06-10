@@ -1,10 +1,11 @@
-import { minorToDecimalString } from "@tieout/core";
-import type { BreakType } from "@tieout/contracts";
+import { convertMinor, minorToDecimalString, parseRate } from "@tieout/core";
+import type { BreakType, FxRateInput } from "@tieout/contracts";
 import type {
   MercadiaDataset,
   PlantedBreak,
   SeedExpectations,
   SeedLedgerEntry,
+  SeedPagolatFile,
   SeedStripeBalanceTransaction,
 } from "./types.js";
 
@@ -48,6 +49,41 @@ const CLUSTER_B: readonly [number, number, number][] = [
   [12, 12, 30],
   [18, 17, 30],
 ];
+
+// ── PagoLat settlement story (stage 2) ──────────────────────────────────────
+// Mercadia's MX storefront settles through PagoLat in MXN; the ledger books one
+// USD entry per day-file at the desk rate. All nets are multiples of 2500 minor
+// units so MXN→USD conversion at 0.0588 is EXACT — expectations never depend on
+// rounding direction.
+const PL_ACCOUNT = "mx-merchant-014";
+const MXN_USD_RATE = "0.0588";
+/** What the ledger mistakenly booked the 05-23 settlement at — the planted fx_drift. */
+const PL_WRONG_INTERNAL_RATE = "0.0612";
+/** [gross, commission] per sale line, minor MXN. Net = gross − commission, always ÷2500. */
+const PL_DAYS: Readonly<
+  Record<string, { sales: readonly [number, number][]; surpriseFeeMinor?: number }>
+> = {
+  // Clean: grouped match, 3 lines.
+  "2026-05-21": { sales: [[100_000, 2_500], [150_000, 5_000], [50_000, 2_500]] },
+  // A platform fee the booking ignored: unexpected_fee consuming the group.
+  "2026-05-22": { sales: [[250_000, 7_500], [100_000, 2_500]], surpriseFeeMinor: -25_000 },
+  // Booked at the wrong internal rate: fx_drift.
+  "2026-05-23": { sales: [[150_000, 5_000], [100_000, 2_500]] },
+  // Restated below: the original carries an erroneous third line PagoLat later removed.
+  "2026-05-25": { sales: [[100_000, 2_500], [50_000, 2_500]] },
+};
+const PL_REMOVED_LINE: readonly [number, number] = [150_000, 5_000];
+
+/** Stripe payouts and the ledger deposits booking them — transfer legs (D29b). */
+const PAYOUTS: readonly { id: string; amountMinor: number; day: number }[] = [
+  { id: "po_mercadia_0001", amountMinor: 250_000, day: 27 },
+  { id: "po_mercadia_0002", amountMinor: 180_000, day: 28 },
+];
+
+const mxn = (minor: number): string => minorToDecimalString(BigInt(minor), "MXN").replace(".", ",");
+
+const RATE = parseRate(MXN_USD_RATE);
+const toUsdMinor = (mxnMinor: bigint): number => Number(convertMinor(mxnMinor, "MXN", "USD", RATE));
 
 const pad = (n: number) => String(n).padStart(4, "0");
 
@@ -334,6 +370,133 @@ export function generateMercadiaDataset(): MercadiaDataset {
     "Customer payment — order #2012 (manual booking, keyed twice in error)",
   );
 
+  // ── PagoLat settlement story ──────────────────────────────────────────────
+  const pagolatFiles: SeedPagolatFile[] = [];
+  const settlementKey = (date: string) => `PL-${PL_ACCOUNT}-${date}`;
+
+  const saleLine = (date: string, i: number, gross: number, commission: number) =>
+    `LINE;${date} 1${i}:00:00;sale;plord_${date.replaceAll("-", "")}_${i + 1};${mxn(gross)};${mxn(commission)};${mxn(gross - commission)};Venta tienda MX`;
+
+  const buildFile = (
+    date: string,
+    lines: { text: string; netMinor: number }[],
+    lie?: { totalNet: number; closing: number },
+  ): string => {
+    const opening = 500_000; // 5.000,00 MXN — cosmetic; the totals must tie to it
+    const totalNet = lie?.totalNet ?? lines.reduce((n, l) => n + l.netMinor, 0);
+    const closing = lie?.closing ?? opening + totalNet;
+    return [
+      `PAGOLAT;SETTLEMENT;v1;${PL_ACCOUNT};${date};-06:00`,
+      `HEADER;opening_balance;${mxn(opening)}`,
+      ...lines.map((l) => l.text),
+      `FOOTER;line_count;${lines.length};total_net;${mxn(totalNet)};closing_balance;${mxn(closing)}`,
+      "",
+    ].join("\n");
+  };
+
+  const bookSettlement = (date: string, usdMinor: number) =>
+    ledgerEntries.push(
+      ledgerEntry({
+        entryId: `LED-2026-PL${date.slice(8)}`,
+        amountMinor: usdMinor,
+        bookedMs: Date.UTC(2026, 4, Number(date.slice(8)) + 1, 9, 0, 0),
+        type: "payment",
+        reference: settlementKey(date),
+        description: `PagoLat settlement ${date} (desk rate ${MXN_USD_RATE})`,
+      }),
+    );
+
+  for (const [date, day] of Object.entries(PL_DAYS)) {
+    const lines = day.sales.map(([gross, commission], i) => ({
+      text: saleLine(date, i, gross, commission),
+      netMinor: gross - commission,
+    }));
+    if (day.surpriseFeeMinor !== undefined) {
+      lines.push({
+        text: `LINE;${date} 18:00:00;fee;;${mxn(day.surpriseFeeMinor)};${mxn(0)};${mxn(day.surpriseFeeMinor)};Cuota plataforma trimestral`,
+        netMinor: day.surpriseFeeMinor,
+      });
+    }
+    const salesNet = day.sales.reduce((n, [gross, commission]) => n + (gross - commission), 0);
+
+    if (date === "2026-05-25") {
+      // The original advice carried an erroneous extra line PagoLat later removed;
+      // both versions ship, landed in order: original first, restatement second.
+      const [removedGross, removedCommission] = PL_REMOVED_LINE;
+      const originalLines = [
+        ...lines,
+        {
+          text: `LINE;${date} 16:00:00;sale;plord_${date.replaceAll("-", "")}_err;${mxn(removedGross)};${mxn(removedCommission)};${mxn(removedGross - removedCommission)};Venta duplicada por error de PagoLat`,
+          netMinor: removedGross - removedCommission,
+        },
+      ];
+      pagolatFiles.push({ fileName: `pagolat-${date}.csv`, content: buildFile(date, originalLines) });
+      pagolatFiles.push({ fileName: `pagolat-${date}.restated.csv`, content: buildFile(date, lines) });
+      // Mercadia books from the corrected advice.
+      bookSettlement(date, toUsdMinor(BigInt(salesNet)));
+      continue;
+    }
+
+    pagolatFiles.push({ fileName: `pagolat-${date}.csv`, content: buildFile(date, lines) });
+    if (date === "2026-05-22") {
+      // The booking ignores the surprise platform fee — unexpected_fee, precisely.
+      bookSettlement(date, toUsdMinor(BigInt(salesNet)));
+    } else if (date === "2026-05-23") {
+      // Booked at the wrong internal rate — fx_drift, the rate is the suspect.
+      bookSettlement(
+        date,
+        Number(convertMinor(BigInt(salesNet), "MXN", "USD", parseRate(PL_WRONG_INTERNAL_RATE))),
+      );
+    } else {
+      bookSettlement(date, toUsdMinor(BigInt(salesNet)));
+    }
+  }
+
+  // A day-file whose footer lies about its own totals: quarantined whole at the
+  // door (D13). Mercadia has not booked it — the advice failed validation.
+  pagolatFiles.push({
+    fileName: "pagolat-2026-05-24.csv",
+    content: buildFile(
+      "2026-05-24",
+      [
+        { text: saleLine("2026-05-24", 0, 100_000, 2_500), netMinor: 97_500 },
+        { text: saleLine("2026-05-24", 1, 50_000, 2_500), netMinor: 47_500 },
+      ],
+      { totalNet: 200_000, closing: 700_000 },
+    ),
+  });
+
+  // ── Stripe payouts and their ledger deposits — transfer legs (D29b) ────────
+  for (const payout of PAYOUTS) {
+    const payoutMs = Date.UTC(2026, 4, payout.day, 16, 0, 0);
+    stripeBalanceTransactions.push({
+      id: `txn_${payout.id}`,
+      object: "balance_transaction",
+      amount: -payout.amountMinor,
+      currency: "usd",
+      created: payoutMs / 1000,
+      available_on: payoutMs / 1000,
+      description: "STRIPE PAYOUT",
+      fee: 0,
+      fee_details: [],
+      net: -payout.amountMinor,
+      reporting_category: "payout",
+      source: payout.id,
+      status: "available",
+      type: "payout",
+    });
+    ledgerEntries.push(
+      ledgerEntry({
+        entryId: `LED-2026-PO${payout.id.slice(-2)}`,
+        amountMinor: payout.amountMinor,
+        bookedMs: payoutMs + 4 * 3_600_000,
+        type: "payout",
+        reference: payout.id,
+        description: `Stripe payout received — ${payout.id}`,
+      }),
+    );
+  }
+
   const plantedBreaks: PlantedBreak[] = [
     {
       id: "planted-unbooked-stripe-fee",
@@ -379,10 +542,24 @@ export function generateMercadiaDataset(): MercadiaDataset {
     },
     {
       id: "planted-referenceless-double-post",
-      breakType: "missing_in_source",
+      breakType: "duplicate_candidate",
       source: "ledger",
       sourceId: "LED-2026-CLE2",
-      reason: "True double-post without a reference: one copy pairs and this one reads missing — flips to duplicate_candidate when the pipeline wires the duplicate heuristic",
+      reason: "True double-post without a reference: one copy pairs through the fallback; the duplicate heuristic names this survivor a duplicate of its matched twin",
+    },
+    {
+      id: "planted-unexpected-platform-fee",
+      breakType: "unexpected_fee",
+      source: "ledger",
+      sourceId: "LED-2026-PL22",
+      reason: "PagoLat charged a quarterly platform fee inside the 05-22 settlement; the booking ignored it — the group mismatch is explained exactly by the fee line",
+    },
+    {
+      id: "planted-fx-drift",
+      breakType: "fx_drift",
+      source: "ledger",
+      sourceId: "LED-2026-PL23",
+      reason: `The 05-23 settlement was booked at ${PL_WRONG_INTERNAL_RATE} but the run's recorded rate is ${MXN_USD_RATE} — the legs disagree beyond tolerance and the rate is the suspect`,
     },
   ];
 
@@ -394,24 +571,86 @@ export function generateMercadiaDataset(): MercadiaDataset {
   for (const b of plantedBreaks) {
     breaksByType[b.breakType] = (breaksByType[b.breakType] ?? 0) + 1;
   }
-  // Referenced charges pair in pass 2 — including cluster group A — and so do
-  // the refunds booked on both sides.
-  const exactReference = ORDER_COUNT - MANUAL_BOOKING_ORDERS.size + bookedRefunds + CLUSTER_A_COUNT;
-  // Reference-less records pair through pass 3: the bulk manual bookings, group B,
+  // Referenced charges pair in pass 3 — including cluster group A, the refunds
+  // booked on both sides, and the payout/deposit transfer legs.
+  const exactReference =
+    ORDER_COUNT - MANUAL_BOOKING_ORDERS.size + bookedRefunds + CLUSTER_A_COUNT + PAYOUTS.length;
+  // Reference-less records pair through pass 4: the bulk manual bookings, group B,
   // the tie pair (C), the inside-the-window booking (D1), one of the double-post (E1).
   const amountDateWindow = MANUAL_BOOKING_ORDERS.size + CLUSTER_B.length + 2 + 1 + 1;
+  // Grouped settlements that tie out: 05-21 (clean) and 05-25 (after restatement).
+  const groupedDays = ["2026-05-21", "2026-05-25"];
+  const groupedReference = groupedDays.length;
+  const groupedMembers = groupedDays.reduce(
+    (n, date) => n + 1 + PL_DAYS[date]!.sales.length,
+    0,
+  );
+
+  // PagoLat raws: every line of the four real day-files, the restated file's
+  // tombstone, plus the original 05-25 erroneous line. The lying 05-24 file
+  // lands nothing.
+  const pagolatLines = Object.values(PL_DAYS).reduce(
+    (n, day) => n + day.sales.length + (day.surpriseFeeMinor !== undefined ? 1 : 0),
+    0,
+  );
+  const pagolatRecords = pagolatLines + 1 /* removed 05-25 line */ + 1 /* its tombstone */;
+  const tombstonedTransactions = 1;
+  const transactions =
+    ledgerEntries.length + stripeBalanceTransactions.length + pagolatRecords;
+  const currentTransactions = transactions - 1; // the removed line's v1 is superseded
+
+  // Breaks consume: one txn for each missing/duplicate/fee leftover, both legs of
+  // nothing here (no amount_mismatch planted), the whole 05-22 group (anchor + 2
+  // sales + fee), and the whole 05-23 group (anchor + 2 sales).
+  const breakConsumed =
+    1 + // radar fee (unexpected_fee leftover)
+    1 + // unbooked refund (missing_in_ledger)
+    1 + // never-settled charge (missing_in_source)
+    1 + // booked duplicate (duplicate_candidate)
+    1 + // window-edge stripe (missing_in_ledger)
+    1 + // window-edge ledger (missing_in_source)
+    1 + // reference-less double-post survivor (duplicate_candidate)
+    (1 + PL_DAYS["2026-05-22"]!.sales.length + 1) + // 05-22 group: anchor + sales + fee
+    (1 + PL_DAYS["2026-05-23"]!.sales.length); // 05-23 group: anchor + sales
+
+  const matchedTransactions =
+    (exactReference + amountDateWindow) * 2 + groupedMembers;
+
   const expected: SeedExpectations = {
     ledgerRecords: ledgerEntries.length,
     stripeRecords: stripeBalanceTransactions.length,
-    transactions: ledgerEntries.length + stripeBalanceTransactions.length,
+    pagolatRecords,
+    transactions,
+    currentTransactions,
+    tombstonedTransactions,
+    quarantinedBatches: 1,
     matches: {
       exact_reference: exactReference,
       amount_date_window: amountDateWindow,
-      total: exactReference + amountDateWindow,
+      grouped_reference: groupedReference,
+      total: exactReference + amountDateWindow + groupedReference,
     },
+    matchedTransactions,
     breaksByType,
     totalBreaks: plantedBreaks.length,
+    breakConsumedTransactions: breakConsumed,
   };
 
-  return { ledgerEntries, stripeBalanceTransactions, manifest: { plantedBreaks, expected } };
+  const fxRates: FxRateInput[] = [
+    {
+      base: "MXN",
+      quote: "USD",
+      rate: MXN_USD_RATE,
+      rateSource: "seed-desk",
+      rateDate: "2026-05-20",
+    },
+  ];
+
+  return {
+    ledgerEntries,
+    stripeBalanceTransactions,
+    pagolatFiles,
+    fxRates,
+    manifest: { plantedBreaks, expected },
+  };
 }

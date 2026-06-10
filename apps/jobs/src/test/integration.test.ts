@@ -15,7 +15,7 @@ import {
   transactions,
 } from "@tieout/db";
 import { connectTestDb, type TestDb } from "@tieout/db/testing";
-import { loadSeedManifest, seedFiles, type SeedLedgerEntry } from "@tieout/seed";
+import { loadSeedFxRates, loadSeedManifest, seedFiles, type SeedLedgerEntry } from "@tieout/seed";
 import { createSeedAdapters } from "../pipeline/adapters.js";
 import { fullRecon, runRecon, type FullReconResult } from "../pipeline/pipeline.js";
 
@@ -68,9 +68,11 @@ describe("Stage 1 acceptance: full pipeline over the seed dataset", () => {
     `);
     first = await fullRecon(client.db, createSeedAdapters(), {
       now: new Date("2026-06-05T00:00:00Z"),
+      fxRates: loadSeedFxRates(),
     });
     second = await fullRecon(client.db, createSeedAdapters(), {
       now: new Date("2026-06-06T00:00:00Z"),
+      fxRates: loadSeedFxRates(),
     });
   });
 
@@ -97,12 +99,18 @@ describe("Stage 1 acceptance: full pipeline over the seed dataset", () => {
     }
   });
 
-  it("quarantines nothing on clean seed data and matches everything else", async () => {
+  it("matches everything the manifest promises; only the lying day-file quarantines", async () => {
     const { expected } = loadSeedManifest();
-    expect(await client.db.select().from(quarantinedRecords)).toHaveLength(0);
+    const quarantined = await client.db.select().from(quarantinedRecords);
+    // One batch-level row for the control-total failure (D13); zero line-level.
+    expect(quarantined).toHaveLength(expected.quarantinedBatches);
+    expect(quarantined.every((q) => q.stage === "batch")).toBe(true);
+
     expect(first.summary.matches).toBe(expected.matches.total);
+    expect(first.summary.matchedTransactions).toBe(expected.matchedTransactions);
     expect(first.summary.totalBreaks).toBe(expected.totalBreaks);
     expect(first.summary.breaks).toMatchObject(expected.breaksByType);
+    expect(first.summary.pendingBySource).toEqual({});
 
     const kindRows = await client.db
       .select({ kind: matches.kind })
@@ -113,6 +121,7 @@ describe("Stage 1 acceptance: full pipeline over the seed dataset", () => {
     expect(byKind).toEqual({
       exact_reference: expected.matches.exact_reference,
       amount_date_window: expected.matches.amount_date_window,
+      grouped_reference: expected.matches.grouped_reference,
     });
   });
 
@@ -121,20 +130,58 @@ describe("Stage 1 acceptance: full pipeline over the seed dataset", () => {
       for (const r of results) {
         expect(r.batchExisted).toBe(true);
         expect(r.rawInserted).toBe(0);
+        expect(r.tombstoned).toBe(0);
       }
     }
     for (const results of Object.values(second.normalized)) {
       for (const r of results) {
         expect(r.normalized).toBe(0);
         expect(r.quarantined).toBe(0);
+        expect(r.tombstoned).toBe(0);
       }
     }
     const { expected } = loadSeedManifest();
     const rawCount = await client.db.select().from(rawRecords);
     const txnCount = await client.db.select().from(transactions);
-    expect(rawCount).toHaveLength(expected.ledgerRecords + expected.stripeRecords);
+    expect(rawCount).toHaveLength(
+      expected.ledgerRecords + expected.stripeRecords + expected.pagolatRecords,
+    );
     expect(txnCount).toHaveLength(expected.transactions);
-    expect(txnCount.every((t) => t.isCurrent && t.version === 1)).toBe(true);
+    expect(txnCount.filter((t) => t.isCurrent)).toHaveLength(expected.currentTransactions);
+    expect(txnCount.filter((t) => t.isTombstone)).toHaveLength(expected.tombstonedTransactions);
+  });
+
+  it("the restated day-file tombstoned exactly the line PagoLat removed", async () => {
+    const tombstones = await client.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.isTombstone, true));
+    expect(tombstones).toHaveLength(1);
+    expect(tombstones[0]).toMatchObject({
+      source: "pagolat",
+      isCurrent: true,
+      groupRef: "PL-mx-merchant-014-2026-05-25",
+    });
+    // Its live predecessor is superseded, never deleted.
+    const versions = await client.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.sourceId, tombstones[0]!.sourceId));
+    expect(versions).toHaveLength(2);
+    expect(versions.find((v) => !v.isTombstone)).toMatchObject({ isCurrent: false, version: 1 });
+  });
+
+  it("settlement lag suppresses in-window breaks as pending — same data, different config", async () => {
+    // txn_cl_d2 (2026-05-23) sits ~12.6 days before the watermark: a 14-day
+    // stripe lag window makes it pending instead of missing_in_ledger.
+    const lagged = await runRecon(client.db, {
+      now: new Date("2026-06-09T00:00:00Z"),
+      asOf: new Date(first.summary.asOf),
+      lagMsBySource: { stripe: 14 * 86_400_000 },
+    });
+    expect(lagged.pendingBySource).toEqual({ stripe: 1 });
+    expect(lagged.breaks.missing_in_ledger).toBe(first.summary.breaks.missing_in_ledger - 1);
+    expect(lagged.totalBreaks).toBe(first.summary.totalBreaks - 1);
   });
 
   it("running recon twice produces identical results", async () => {

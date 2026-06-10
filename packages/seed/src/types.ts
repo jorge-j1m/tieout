@@ -1,4 +1,4 @@
-import type { BreakType } from "@tieout/contracts";
+import type { BreakType, FxRateInput } from "@tieout/contracts";
 
 /** Mercadia's internal ledger entry — the shape its own books export (a source shape, not ours). */
 export interface SeedLedgerEntry {
@@ -57,11 +57,33 @@ export interface PlantedBreak {
 export interface SeedExpectations {
   ledgerRecords: number;
   stripeRecords: number;
-  /** Raw records and transactions after one clean run: every record, exactly once. */
+  /** PagoLat raw records landed, including the tombstone the restated file produces. */
+  pagolatRecords: number;
+  /** Transaction rows after one clean pipeline run (the tombstone version included). */
   transactions: number;
-  matches: { total: number; exact_reference: number; amount_date_window: number };
+  /** Rows still current (= transactions − superseded pre-restatement versions). */
+  currentTransactions: number;
+  tombstonedTransactions: number;
+  /** Whole units rejected at the door by their own control totals (D13). */
+  quarantinedBatches: number;
+  matches: {
+    total: number;
+    exact_reference: number;
+    amount_date_window: number;
+    grouped_reference: number;
+  };
+  /** Transactions consumed by matches — grouped matches carry more than two members. */
+  matchedTransactions: number;
   breaksByType: Partial<Record<BreakType, number>>;
   totalBreaks: number;
+  /** Transactions consumed by breaks (contradiction breaks consume whole groups). */
+  breakConsumedTransactions: number;
+}
+
+/** One generated PagoLat day-file, written to data/pagolat/ by `pnpm seed`. */
+export interface SeedPagolatFile {
+  fileName: string;
+  content: string;
 }
 
 /** The machine-readable acceptance contract (`data/manifest.json`) — the single source of truth for every count the tests and docs quote. */
@@ -73,5 +95,9 @@ export interface SeedManifest {
 export interface MercadiaDataset {
   ledgerEntries: SeedLedgerEntry[];
   stripeBalanceTransactions: SeedStripeBalanceTransaction[];
+  /** Day-files in landing order — the restated 05-25 file follows its original. */
+  pagolatFiles: SeedPagolatFile[];
+  /** The run's recorded rates (D7), upserted into fx_rates by the pipeline. */
+  fxRates: FxRateInput[];
   manifest: SeedManifest;
 }
