@@ -18,6 +18,13 @@ export const normalizedTxnSchema = z.object({
   sourceType: z.string().min(1),
   type: canonicalTxnTypeSchema,
   amountMinor: z.bigint(),
+  /**
+   * Amount net of source-side fees, when the source nets them inside the record
+   * (Stripe's amount/fee/net, PagoLat's line commissions). Equal to `amountMinor`
+   * for sources without the concept. Grouped settlement matching compares nets —
+   * that's what actually arrives.
+   */
+  netMinor: z.bigint(),
   currency: z.string().regex(/^[A-Z][A-Z0-9]{2,5}$/),
   occurredAt: z.date(),
   valueDate: z.iso.date().nullable(),
@@ -25,6 +32,12 @@ export const normalizedTxnSchema = z.object({
   account: z.string().min(1),
   /** Cross-source matching key when the source carries one (e.g. a charge id). */
   reference: z.string().min(1).nullable(),
+  /**
+   * The settlement/payout unit this record belongs to, when the source declares one
+   * (a PagoLat line's day-file, a charge's payout). Grouped matching buckets on it;
+   * the ledger anchor's `reference` names the same key.
+   */
+  groupRef: z.string().min(1).nullable(),
   status: txnStatusSchema,
   metadata: z.record(z.string(), z.unknown()),
 });

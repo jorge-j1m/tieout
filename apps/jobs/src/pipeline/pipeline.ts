@@ -120,6 +120,8 @@ export async function runRecon(db: Db, opts: ReconOptions): Promise<ReconSummary
     matchedTransactions: matches.length * 2,
     breaks: breakCounts,
     totalBreaks: breaks.length,
+    // Settlement-lag suppression arrives with ruleset-v2; until then nothing is pending.
+    pendingBySource: {},
   };
 }
 

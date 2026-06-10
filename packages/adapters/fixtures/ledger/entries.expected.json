@@ -10,11 +10,13 @@
         "sourceType": "payment",
         "type": "payment",
         "amountMinor": "6737",
+        "netMinor": "6737",
         "currency": "USD",
         "occurredAt": "2026-05-03T09:15:00.000Z",
         "valueDate": "2026-05-03",
         "account": "mercadia:operating",
         "reference": "ch_test_0001",
+        "groupRef": null,
         "status": "settled",
         "metadata": {
           "description": "Customer payment — order #9001"
@@ -33,11 +35,13 @@
         "sourceType": "refund",
         "type": "refund",
         "amountMinor": "-1500",
+        "netMinor": "-1500",
         "currency": "USD",
         "occurredAt": "2026-05-05T14:00:00.000Z",
         "valueDate": "2026-05-05",
         "account": "mercadia:operating",
         "reference": "re_test_0001",
+        "groupRef": null,
         "status": "settled",
         "metadata": {
           "description": "Refund — order #9001"
@@ -56,11 +60,13 @@
         "sourceType": "payment",
         "type": "payment",
         "amountMinor": "12000",
+        "netMinor": "12000",
         "currency": "USD",
         "occurredAt": "2026-05-06T08:30:00.000Z",
         "valueDate": "2026-05-06",
         "account": "mercadia:operating",
         "reference": null,
+        "groupRef": null,
         "status": "pending",
         "metadata": {
           "description": "Manual journal — wholesale order"
@@ -79,11 +85,13 @@
         "sourceType": "payment",
         "type": "payment",
         "amountMinor": "5400",
+        "netMinor": "5400",
         "currency": "JPY",
         "occurredAt": "2026-05-07T01:00:00.000Z",
         "valueDate": "2026-05-07",
         "account": "mercadia:operating-jp",
         "reference": "ch_test_0002",
+        "groupRef": null,
         "status": "settled",
         "metadata": {
           "description": "Customer payment — JP storefront"
@@ -102,11 +110,13 @@
         "sourceType": "payment",
         "type": "payment",
         "amountMinor": "4200",
+        "netMinor": "4200",
         "currency": "USD",
         "occurredAt": "2026-05-08T10:00:00.000Z",
         "valueDate": "2026-05-08",
         "account": "mercadia:operating",
         "reference": "ch_test_0003",
+        "groupRef": null,
         "status": "reversed",
         "metadata": {
           "description": "Voided posting"

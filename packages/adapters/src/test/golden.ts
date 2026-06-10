@@ -16,6 +16,7 @@ function serializeResult(result: NormalizeResult): unknown {
     txn: {
       ...txn,
       amountMinor: txn.amountMinor.toString(),
+      netMinor: txn.netMinor.toString(),
       occurredAt: txn.occurredAt.toISOString(),
     },
   };

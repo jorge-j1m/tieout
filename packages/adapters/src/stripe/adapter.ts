@@ -83,11 +83,14 @@ export function normalizeStripeBalanceTxn(raw: RawForNormalize): NormalizeResult
       type,
       // Integer minor units from the source, straight to bigint — never through a float.
       amountMinor: BigInt(txn.amount),
+      // Stripe nets its fee inside the balance transaction (amount − fee = net).
+      netMinor: BigInt(txn.net),
       currency,
       occurredAt: new Date(txn.created * 1000),
       valueDate: new Date(txn.available_on * 1000).toISOString().slice(0, 10),
       account: raw.sourceAccount,
       reference: txn.source,
+      groupRef: null,
       status,
       metadata: {
         fee: txn.fee,

@@ -20,6 +20,13 @@ export interface LandedBatch {
   idempotencyKey: string;
   /** Source-declared integrity data (control totals, line counts) when the source provides it (D13). */
   controlTotals?: Record<string, unknown>;
+  /**
+   * Declared when this batch is the COMPLETE current content of a re-deliverable
+   * unit (a settlement file that may be restated). Landing diffs it against the
+   * unit's previous landing: identities that vanished get tombstone versions (D8).
+   * Window-based API landings never set this — absence from a window means nothing.
+   */
+  completeUnit?: { key: string };
   records: LandedRecord[];
 }
 
