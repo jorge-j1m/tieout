@@ -9,13 +9,16 @@ import { normalizeBatchTask } from "./normalize-batch.js";
 const LOOKBACK_MS = 48 * 3_600_000;
 
 /**
- * Scheduled, windowed Stripe landing (D12): every run re-covers a 48h lookback
- * window behind the schedule timestamp — late, out-of-order data is re-observed
- * and content-hash dedup makes the overlap free. Assume every run happens twice.
+ * Windowed Stripe landing (D12): every run re-covers a 48h lookback window
+ * behind the schedule timestamp — late, out-of-order data is re-observed and
+ * content-hash dedup makes the overlap free. Assume every run happens twice.
+ *
+ * No declarative cron yet: against the committed Stage 1 fixture an hourly run
+ * is a pure no-op (D25 — the adapter lands whole content-hash-keyed units), so
+ * the schedule returns with the live Stripe client in Stage 2.
  */
 export const landStripeTask = schedules.task({
   id: "land-stripe",
-  cron: "0 * * * *",
   run: async (payload) => {
     const to = payload.timestamp;
     const from = new Date(to.getTime() - LOOKBACK_MS);
