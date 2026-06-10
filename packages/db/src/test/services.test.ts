@@ -1,10 +1,18 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { LandedBatch, LandedRecord, SourceAdapter } from "@tieout/contracts";
 import { eq, and, asc } from "drizzle-orm";
-import { quarantinedRecords, rawRecords, sourceCursors, transactions } from "../schema.js";
+import {
+  outbox,
+  quarantinedRecords,
+  rawRecords,
+  reconRuns,
+  sourceCursors,
+  transactions,
+} from "../schema.js";
 import { advanceCursor } from "../services/cursors.js";
 import { landBatch } from "../services/ingest.js";
 import { normalizeBatch } from "../services/normalize.js";
+import { markOutboxProcessed, unprocessedOutbox } from "../services/outbox.js";
 import { loadTransactionsAsOf } from "../services/recon.js";
 import { connectTestDb, truncateAll, type TestDb } from "./helpers.js";
 
@@ -365,6 +373,80 @@ describe("ingestion services", () => {
       .where(and(eq(transactions.sourceId, "e1"), eq(transactions.isCurrent, true)));
     expect(current).toHaveLength(1);
     expect(current[0]).toMatchObject({ version: 3, isTombstone: false, amountMinor: 1000n });
+  });
+
+  it("a supersession writes exactly one outbox event, in the same transaction (D17)", async () => {
+    const { db } = client;
+    const w1 = await landBatch(db, batch("ledger:w1", [record("e1", { amountMinor: "1000" })]), NOW);
+    await normalizeBatch(db, stubAdapter, w1.batchId, NOW);
+    expect(await db.select().from(outbox)).toHaveLength(0); // first versions are not events
+
+    const w2 = await landBatch(db, batch("ledger:w2", [record("e1", { amountMinor: "2000" })]), LATER);
+    await normalizeBatch(db, stubAdapter, w2.batchId, LATER);
+
+    const events = await db.select().from(outbox);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ topic: "transaction.superseded", processedAt: null });
+    const versions = await db.select().from(transactions).orderBy(asc(transactions.version));
+    expect(events[0]!.payload).toMatchObject({
+      source: "ledger",
+      sourceId: "e1",
+      oldTransactionId: versions[0]!.id,
+      oldVersion: 1,
+      newTransactionId: versions[1]!.id,
+      newVersion: 2,
+    });
+
+    // Idempotent: re-normalizing (everything processed) emits nothing new.
+    await normalizeBatch(db, stubAdapter, w2.batchId, LATER);
+    expect(await db.select().from(outbox)).toHaveLength(1);
+  });
+
+  it("a tombstone writes a transaction.tombstoned event; an unchanged re-translation writes none", async () => {
+    const { db } = client;
+    const unit = { key: "ledger:entries.json" };
+    const v1 = await landBatch(
+      db,
+      batch("ledger:v1", [record("e1", { amountMinor: "1000" })], { completeUnit: unit }),
+      NOW,
+    );
+    await normalizeBatch(db, stubAdapter, v1.batchId, NOW);
+
+    // D26 skip: bumped version, identical output — no event.
+    const v2Same: SourceAdapter = { ...stubAdapter, normalizerVersion: "stub-v2" };
+    await normalizeBatch(db, v2Same, v1.batchId, LATER);
+    expect(await db.select().from(outbox)).toHaveLength(0);
+
+    const v2 = await landBatch(db, batch("ledger:v2", [], { completeUnit: unit }), LATER);
+    await normalizeBatch(db, stubAdapter, v2.batchId, LATER);
+    const events = await db.select().from(outbox);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ topic: "transaction.tombstoned" });
+  });
+
+  it("dispatching claims events once: the stamp is guarded against double-processing", async () => {
+    const { db } = client;
+    const w1 = await landBatch(db, batch("ledger:w1", [record("e1", { amountMinor: "1000" })]), NOW);
+    await normalizeBatch(db, stubAdapter, w1.batchId, NOW);
+    const w2 = await landBatch(db, batch("ledger:w2", [record("e1", { amountMinor: "2000" })]), LATER);
+    await normalizeBatch(db, stubAdapter, w2.batchId, LATER);
+
+    const claimed = await unprocessedOutbox(db);
+    expect(claimed).toHaveLength(1);
+
+    // A run id to stamp with — any run row works for the FK.
+    const [run] = await db
+      .insert(reconRuns)
+      .values({ asOf: LATER, rulesetVersion: "ruleset-v2", status: "completed", stats: {}, startedAt: LATER })
+      .returning({ id: reconRuns.id });
+
+    expect(await markOutboxProcessed(db, claimed.map((e) => e.id), run!.id, LATER)).toBe(1);
+    expect(await markOutboxProcessed(db, claimed.map((e) => e.id), run!.id, LATER)).toBe(0);
+    expect(await unprocessedOutbox(db)).toHaveLength(0);
+
+    const [event] = await db.select().from(outbox);
+    expect(event).toMatchObject({ processedByRunId: run!.id });
+    expect(event!.processedAt).not.toBeNull();
   });
 
   it("cursors only move forward", async () => {

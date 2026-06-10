@@ -435,7 +435,11 @@ Following one record through its whole life:
 
 What *can* change, exhaustively: the `isCurrent`/`supersededAt` flags (§5.2), a batch's
 processing status (`landed` → `normalized` — operational bookkeeping, not financial
-data), and source cursors (operational progress markers). That is the complete list.
+data), source cursors (operational progress markers), outbox processing stamps
+(`processedAt`/`processedByRunId` — recording that a change event was re-evaluated,
+never altering the event itself), and exception workflow status (whose every
+transition is also recorded in an append-only event history). That is the complete
+list.
 
 ## 11. Frequently asked questions
 
