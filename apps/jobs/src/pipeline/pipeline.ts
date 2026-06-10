@@ -5,7 +5,7 @@ import {
   advanceCursor,
   currentWatermark,
   landBatch,
-  loadCurrentTransactions,
+  loadTransactionsAsOf,
   normalizeBatch,
   persistReconRun,
   type Db,
@@ -59,17 +59,18 @@ export interface ReconOptions {
 }
 
 /**
- * One reconciliation run: snapshot the watermark, load the current transaction
- * versions it covers, match in core (pure), persist run + matches + breaks.
+ * One reconciliation run: snapshot the watermark, load the transaction versions
+ * in effect at it (D27), match in core (pure), persist run + matches + breaks.
  * The watermark derives from the data — running twice on the same data produces
- * identical matches and breaks.
+ * identical matches and breaks, and an explicit old `asOf` re-executes a past
+ * run byte-for-byte even after restatements.
  */
 export async function runRecon(db: Db, opts: ReconOptions): Promise<ReconSummary> {
   const asOf = opts.asOf ?? (await currentWatermark(db));
   if (asOf === null) {
     throw new Error("nothing has been ingested yet — land and normalize before reconciling");
   }
-  const rows = await loadCurrentTransactions(db, asOf);
+  const rows = await loadTransactionsAsOf(db, asOf);
   const toMatchable = (t: (typeof rows)[number]): MatchableTxn => ({
     id: t.id,
     version: t.version,

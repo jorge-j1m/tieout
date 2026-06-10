@@ -1,19 +1,23 @@
 import "../env.js";
+import { readFileSync } from "node:fs";
 import { eq, sql as dsql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { BreakTxnDetail } from "@tieout/core";
+import { LEDGER_SOURCE } from "@tieout/adapters";
 import {
   breaks,
+  landBatch,
   matchMembers,
   matches,
+  normalizeBatch,
   quarantinedRecords,
   rawRecords,
   transactions,
 } from "@tieout/db";
 import { connectTestDb, type TestDb } from "@tieout/db/testing";
-import { loadPlantedManifest } from "@tieout/seed";
+import { loadPlantedManifest, seedFiles, type SeedLedgerEntry } from "@tieout/seed";
 import { createSeedAdapters } from "../pipeline/adapters.js";
-import { fullRecon, type FullReconResult } from "../pipeline/pipeline.js";
+import { fullRecon, runRecon, type FullReconResult } from "../pipeline/pipeline.js";
 
 /** Order-independent fingerprints of a run's matches and breaks, for run-vs-run comparison. */
 async function runFingerprint(client: TestDb, runId: string) {
@@ -130,4 +134,56 @@ describe("Stage 1 acceptance: full pipeline over the seed dataset", () => {
     expect(b).toEqual(a);
   });
 
+  it("a past run re-executes identically after a restatement — the audit claim, tested", async () => {
+    const originalFingerprint = await runFingerprint(client, first.summary.runId);
+
+    // Restate one ledger entry ($49.00 → $48.90), as a re-issued export would.
+    const entries = JSON.parse(
+      readFileSync(seedFiles.ledgerEntries, "utf8"),
+    ) as SeedLedgerEntry[];
+    const entry = entries.find((e) => e.entryId === "LED-2026-0001")!;
+    const restatedAt = new Date("2026-06-07T00:00:00Z");
+    const landed = await landBatch(
+      client.db,
+      {
+        source: LEDGER_SOURCE,
+        connection: "seed",
+        kind: "seed",
+        externalRef: "ledger-restated",
+        idempotencyKey: "ledger:file:restated-test",
+        records: [
+          {
+            sourceAccount: entry.account,
+            sourceId: entry.entryId,
+            payload: { ...entry, amount: "48.90" },
+          },
+        ],
+      },
+      restatedAt,
+    );
+    expect(landed.rawInserted).toBe(1);
+    const normalized = await normalizeBatch(
+      client.db,
+      createSeedAdapters()[LEDGER_SOURCE]!,
+      landed.batchId,
+      restatedAt,
+    );
+    expect(normalized).toMatchObject({ normalized: 1, superseded: 1 });
+
+    // The present-day run sees the contradiction…
+    const today = await runRecon(client.db, { now: restatedAt });
+    expect(today.asOf).not.toBe(first.summary.asOf);
+    expect(today.breaks.amount_mismatch).toBe(1);
+
+    // …while re-executing the original watermark reproduces the original
+    // conclusions exactly, restatement notwithstanding.
+    const replay = await runRecon(client.db, {
+      now: new Date("2026-06-08T00:00:00Z"),
+      asOf: new Date(first.summary.asOf),
+    });
+    expect(replay.asOf).toBe(first.summary.asOf);
+    expect(replay.matches).toBe(first.summary.matches);
+    expect(replay.breaks).toEqual(first.summary.breaks);
+    expect(await runFingerprint(client, replay.runId)).toEqual(originalFingerprint);
+  });
 });
