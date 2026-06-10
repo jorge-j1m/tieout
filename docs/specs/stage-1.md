@@ -46,8 +46,6 @@ UI, auth, PagoLat/bank/stablecoin adapters, grouped (1:N) matching, FX/tolerance
 
 (parking lot — move items into the next spec, don't implement from here)
 
-- Relabel reference-less double-posts: ruleset-v1 pairs one copy through pass 3 and
-  reports the other `missing_in_stripe` (pinned by a core test and seed break #7,
-  `LED-2026-CLE2`); a duplicate heuristic for reference-less records (same amount +
-  account + tight time proximity on one side) could call it `duplicate_candidate`
-  instead, pointing the human at "we booked twice" rather than "where is my money".
+- ~~Relabel reference-less double-posts~~ → moved to `stage-2.md` (In scope, matching
+  v2): the mislabeling stays pinned by a core test and seed break #7 (`LED-2026-CLE2`)
+  until ruleset-v2 flips it deliberately.
