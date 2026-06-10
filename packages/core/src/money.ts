@@ -73,6 +73,75 @@ export function parseDecimalToMinor(
   return sign === "-" ? -minor : minor;
 }
 
+/**
+ * An FX rate parsed for bigint arithmetic: `rate = mantissa / 10^scale` (D7).
+ * Rates are data, never floats; zero and negative rates are malformed.
+ */
+export interface ParsedRate {
+  mantissa: bigint;
+  scale: number;
+}
+
+const RATE_FORMAT = /^(\d+)(?:\.(\d+))?$/;
+
+export function parseRate(rate: string): ParsedRate {
+  const match = RATE_FORMAT.exec(rate.trim());
+  if (!match) {
+    throw new MoneyParseError(`malformed fx rate: ${JSON.stringify(rate)}`);
+  }
+  const [, whole, fraction = ""] = match;
+  const mantissa = BigInt(whole! + fraction);
+  if (mantissa === 0n) {
+    throw new MoneyParseError(`fx rate must be positive: ${JSON.stringify(rate)}`);
+  }
+  return { mantissa, scale: fraction.length };
+}
+
+/** Divide with round-half-even (banker's rounding) — the only rounding money ever gets. */
+function divideHalfEven(numerator: bigint, divisor: bigint): bigint {
+  const negative = numerator < 0n !== divisor < 0n;
+  const n = numerator < 0n ? -numerator : numerator;
+  const d = divisor < 0n ? -divisor : divisor;
+  let quotient = n / d;
+  const remainder = n % d;
+  const twice = remainder * 2n;
+  if (twice > d || (twice === d && quotient % 2n === 1n)) {
+    quotient += 1n;
+  }
+  return negative ? -quotient : quotient;
+}
+
+/**
+ * Convert minor units across currencies with an explicit rate: 1 major unit of
+ * `from` = rate major units of `to`. Exact bigint arithmetic; when the result has
+ * more precision than `to` carries, it rounds half-even — and that this happened
+ * is visible to callers via the recorded rate, never hidden.
+ */
+export function convertMinor(
+  amountMinor: bigint,
+  from: string,
+  to: string,
+  rate: ParsedRate,
+): bigint {
+  const power = exponentFor(to) - exponentFor(from) - rate.scale;
+  const product = amountMinor * rate.mantissa;
+  return power >= 0 ? product * 10n ** BigInt(power) : divideHalfEven(product, 10n ** BigInt(-power));
+}
+
+/**
+ * Is `actual` within `toleranceBps` basis points of `expected`? Pure bigint —
+ * |actual − expected| · 10000 ≤ toleranceBps · |expected|. With expected = 0 only
+ * an exact match passes.
+ */
+export function isWithinBps(actual: bigint, expected: bigint, toleranceBps: number): boolean {
+  if (!Number.isInteger(toleranceBps) || toleranceBps < 0) {
+    throw new MoneyParseError(`toleranceBps must be a non-negative integer: ${toleranceBps}`);
+  }
+  const delta = actual >= expected ? actual - expected : expected - actual;
+  const magnitude = expected < 0n ? -expected : expected;
+  return delta * 10_000n <= BigInt(toleranceBps) * magnitude;
+}
+
 /** Render minor units as a plain dot-decimal string with the currency's full precision. */
 export function minorToDecimalString(amountMinor: bigint, currency: string): string {
   const exponent = exponentFor(currency);
