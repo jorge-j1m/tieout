@@ -1,0 +1,8 @@
+PAGOLAT;SETTLEMENT;v1;mx-merchant-014;2026-05-22;-06:00
+HEADER;opening_balance;0,00
+LINE;2026-05-22 09:00:00;chargeback;plord_901;100,00;0,00;100,00;Contracargo no mapeado
+LINE;2026-05-22 09:30:00;sale;plord_902;12.3.4;0,00;12.3.4;Monto mal formado
+LINE;2026-05-22 9:99:99;sale;plord_903;50,00;1,45;48,55;Hora rota
+LINE;2026-05-22 10:00:00;sale;plord_904;200,00;5,80;190,00;Net que no cuadra
+LINE;2026-05-22 11:00:00;sale;plord_905;75,00;2,17;72,83;Venta buena
+FOOTER;line_count;5;total_net;0,00;closing_balance;0,00

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { LandedBatch, LandedRecord, SourceAdapter } from "@tieout/contracts";
 import { eq, and, asc } from "drizzle-orm";
 import {
+  ingestionBatches,
   outbox,
   quarantinedRecords,
   rawRecords,
@@ -447,6 +448,67 @@ describe("ingestion services", () => {
     const [event] = await db.select().from(outbox);
     expect(event).toMatchObject({ processedByRunId: run!.id });
     expect(event!.processedAt).not.toBeNull();
+  });
+
+  it("a batch declaring integrity failure quarantines whole: no raws, one batch-level row (D13)", async () => {
+    const { db } = client;
+    const result = await landBatch(
+      db,
+      batch("pagolat:bad", [record("l1", { x: 1 })], {
+        source: "pagolat",
+        integrityFailure: [{ path: "footer.total_net", message: "lines sum to 1 but file declares 2" }],
+      }),
+      NOW,
+    );
+    expect(result).toMatchObject({ batchQuarantined: true, rawInserted: 0, tombstoned: 0 });
+    expect(await db.select().from(rawRecords)).toHaveLength(0);
+    const quarantined = await db.select().from(quarantinedRecords);
+    expect(quarantined).toHaveLength(1);
+    expect(quarantined[0]).toMatchObject({ stage: "batch", source: "pagolat", rawId: null });
+
+    // Re-landing the same lying unit converges without duplicating the quarantine row.
+    const again = await landBatch(
+      db,
+      batch("pagolat:bad", [record("l1", { x: 1 })], {
+        source: "pagolat",
+        integrityFailure: [{ path: "footer.total_net", message: "lines sum to 1 but file declares 2" }],
+      }),
+      LATER,
+    );
+    expect(again).toMatchObject({ batchExisted: true, batchQuarantined: true });
+    expect(await db.select().from(quarantinedRecords)).toHaveLength(1);
+  });
+
+  it("the circuit breaker halts a batch that quarantines past the threshold (D14)", async () => {
+    const { db } = client;
+    const { batchId } = await landBatch(
+      db,
+      batch("ledger:w1", [
+        record("e1", { bad: true }),
+        record("e2", { bad: true }),
+        record("e3", { bad: true }),
+        record("e4", { amountMinor: "1000" }),
+      ]),
+      NOW,
+    );
+    const result = await normalizeBatch(db, stubAdapter, batchId, NOW);
+    // The parseable remainder is collateral — quarantined with an explicit reason.
+    expect(result).toMatchObject({ normalized: 0, quarantined: 4 });
+    expect(await db.select().from(transactions)).toHaveLength(0);
+    const collateral = await db
+      .select()
+      .from(quarantinedRecords)
+      .where(eq(quarantinedRecords.sourceId, "e4"));
+    expect(collateral[0]!.errors).toEqual([
+      { path: "batch", message: "not processed: batch halted by the quarantine-rate circuit breaker" },
+    ]);
+    const [batchRow] = await db.select().from(ingestionBatches);
+    expect(batchRow!.status).toBe("halted");
+
+    // Re-running changes nothing and the halt stays visible.
+    const again = await normalizeBatch(db, stubAdapter, batchId, LATER);
+    expect(again).toMatchObject({ normalized: 0, quarantined: 0, skipped: 4 });
+    expect((await db.select().from(ingestionBatches))[0]!.status).toBe("halted");
   });
 
   it("cursors only move forward", async () => {

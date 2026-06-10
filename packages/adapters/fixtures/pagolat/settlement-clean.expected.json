@@ -1,0 +1,158 @@
+[
+  {
+    "sourceId": "syn_a0d1710c72da3eaf2318d2e2b646d4da",
+    "result": {
+      "ok": true,
+      "txn": {
+        "source": "pagolat",
+        "sourceAccount": "mx-merchant-014",
+        "sourceId": "syn_a0d1710c72da3eaf2318d2e2b646d4da",
+        "sourceType": "sale",
+        "type": "payment",
+        "amountMinor": "125000",
+        "netMinor": "121375",
+        "currency": "MXN",
+        "occurredAt": "2026-05-21T15:15:00.000Z",
+        "valueDate": "2026-05-21",
+        "account": "mx-merchant-014",
+        "reference": "plord_801",
+        "groupRef": "PL-mx-merchant-014-2026-05-21",
+        "status": "settled",
+        "metadata": {
+          "description": "Venta tienda en linea",
+          "commission": "36,25"
+        }
+      }
+    }
+  },
+  {
+    "sourceId": "syn_e84dee8cd271b1cbf4ae88277e76bb6d",
+    "result": {
+      "ok": true,
+      "txn": {
+        "source": "pagolat",
+        "sourceAccount": "mx-merchant-014",
+        "sourceId": "syn_e84dee8cd271b1cbf4ae88277e76bb6d",
+        "sourceType": "sale",
+        "type": "payment",
+        "amountMinor": "89050",
+        "netMinor": "86468",
+        "currency": "MXN",
+        "occurredAt": "2026-05-21T16:42:00.000Z",
+        "valueDate": "2026-05-21",
+        "account": "mx-merchant-014",
+        "reference": "plord_802",
+        "groupRef": "PL-mx-merchant-014-2026-05-21",
+        "status": "settled",
+        "metadata": {
+          "description": "Venta tienda en linea",
+          "commission": "25,82"
+        }
+      }
+    }
+  },
+  {
+    "sourceId": "syn_c532b623cc84a28d1cb599e882dc11e4",
+    "result": {
+      "ok": true,
+      "txn": {
+        "source": "pagolat",
+        "sourceAccount": "mx-merchant-014",
+        "sourceId": "syn_c532b623cc84a28d1cb599e882dc11e4",
+        "sourceType": "refund",
+        "type": "refund",
+        "amountMinor": "-45000",
+        "netMinor": "-45000",
+        "currency": "MXN",
+        "occurredAt": "2026-05-21T17:05:00.000Z",
+        "valueDate": "2026-05-21",
+        "account": "mx-merchant-014",
+        "reference": "plord_795",
+        "groupRef": "PL-mx-merchant-014-2026-05-21",
+        "status": "settled",
+        "metadata": {
+          "description": "Devolucion cliente",
+          "commission": "0,00"
+        }
+      }
+    }
+  },
+  {
+    "sourceId": "syn_339d86d150948e79993d5694fb5c62d1",
+    "result": {
+      "ok": true,
+      "txn": {
+        "source": "pagolat",
+        "sourceAccount": "mx-merchant-014",
+        "sourceId": "syn_339d86d150948e79993d5694fb5c62d1",
+        "sourceType": "fee",
+        "type": "fee",
+        "amountMinor": "-12000",
+        "netMinor": "-12000",
+        "currency": "MXN",
+        "occurredAt": "2026-05-21T18:00:00.000Z",
+        "valueDate": "2026-05-21",
+        "account": "mx-merchant-014",
+        "reference": null,
+        "groupRef": "PL-mx-merchant-014-2026-05-21",
+        "status": "settled",
+        "metadata": {
+          "description": "Cuota mensual plataforma",
+          "commission": "0,00"
+        }
+      }
+    }
+  },
+  {
+    "sourceId": "syn_c4aa672ae5b1c255a85a1ca74486347f",
+    "result": {
+      "ok": true,
+      "txn": {
+        "source": "pagolat",
+        "sourceAccount": "mx-merchant-014",
+        "sourceId": "syn_c4aa672ae5b1c255a85a1ca74486347f",
+        "sourceType": "sale",
+        "type": "payment",
+        "amountMinor": "8999",
+        "netMinor": "8738",
+        "currency": "MXN",
+        "occurredAt": "2026-05-21T19:30:00.000Z",
+        "valueDate": "2026-05-21",
+        "account": "mx-merchant-014",
+        "reference": "plord_803",
+        "groupRef": "PL-mx-merchant-014-2026-05-21",
+        "status": "settled",
+        "metadata": {
+          "description": "Venta kiosko",
+          "commission": "2,61"
+        }
+      }
+    }
+  },
+  {
+    "sourceId": "syn_6ed556ba164d2b54392dc07e65486c1b",
+    "result": {
+      "ok": true,
+      "txn": {
+        "source": "pagolat",
+        "sourceAccount": "mx-merchant-014",
+        "sourceId": "syn_6ed556ba164d2b54392dc07e65486c1b",
+        "sourceType": "sale",
+        "type": "payment",
+        "amountMinor": "8999",
+        "netMinor": "8738",
+        "currency": "MXN",
+        "occurredAt": "2026-05-21T19:30:00.000Z",
+        "valueDate": "2026-05-21",
+        "account": "mx-merchant-014",
+        "reference": "plord_803",
+        "groupRef": "PL-mx-merchant-014-2026-05-21",
+        "status": "settled",
+        "metadata": {
+          "description": "Venta kiosko",
+          "commission": "2,61"
+        }
+      }
+    }
+  }
+]

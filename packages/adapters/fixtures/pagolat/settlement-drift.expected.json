@@ -1,0 +1,76 @@
+[
+  {
+    "sourceId": "syn_88989802916866174d87b5b2018698bd",
+    "result": {
+      "ok": false,
+      "errors": [
+        {
+          "path": "type",
+          "message": "unmapped pagolat type: chargeback"
+        }
+      ]
+    }
+  },
+  {
+    "sourceId": "syn_4a58aab42524186f21f871441cffa413",
+    "result": {
+      "ok": false,
+      "errors": [
+        {
+          "path": "amount",
+          "message": "malformed comma-format amount: \"12.3.4\""
+        }
+      ]
+    }
+  },
+  {
+    "sourceId": "syn_af69689442a27271f21bdf8aeef4ef30",
+    "result": {
+      "ok": false,
+      "errors": [
+        {
+          "path": "datetime",
+          "message": "malformed local datetime: \"2026-05-22 9:99:99\""
+        }
+      ]
+    }
+  },
+  {
+    "sourceId": "syn_27d3d1fb3f0fb1e4778fe8bd0d540950",
+    "result": {
+      "ok": false,
+      "errors": [
+        {
+          "path": "net",
+          "message": "gross − commission ≠ net (20000 − 580 ≠ 19000)"
+        }
+      ]
+    }
+  },
+  {
+    "sourceId": "syn_597a90bbdaed84f1dc4c8d3ea50ddf61",
+    "result": {
+      "ok": true,
+      "txn": {
+        "source": "pagolat",
+        "sourceAccount": "mx-merchant-014",
+        "sourceId": "syn_597a90bbdaed84f1dc4c8d3ea50ddf61",
+        "sourceType": "sale",
+        "type": "payment",
+        "amountMinor": "7500",
+        "netMinor": "7283",
+        "currency": "MXN",
+        "occurredAt": "2026-05-22T17:00:00.000Z",
+        "valueDate": "2026-05-22",
+        "account": "mx-merchant-014",
+        "reference": "plord_905",
+        "groupRef": "PL-mx-merchant-014-2026-05-22",
+        "status": "settled",
+        "metadata": {
+          "description": "Venta buena",
+          "commission": "2,17"
+        }
+      }
+    }
+  }
+]

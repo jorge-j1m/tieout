@@ -1,5 +1,5 @@
 import type { BatchKind } from "./canonical.js";
-import type { NormalizeResult } from "./txn.js";
+import type { NormalizeResult, QuarantineError } from "./txn.js";
 
 /** One observation landed exactly as received. Plain JSON — never transformed at landing (D9). */
 export interface LandedRecord {
@@ -27,12 +27,27 @@ export interface LandedBatch {
    * Window-based API landings never set this — absence from a window means nothing.
    */
   completeUnit?: { key: string };
+  /**
+   * Set when the unit failed its OWN integrity checks (control totals, D13).
+   * Landing quarantines the whole batch: no raw records, one batch-level
+   * quarantine row carrying these errors. The file is suspect end to end —
+   * landing half of a lying file would manufacture false breaks.
+   */
+  integrityFailure?: QuarantineError[];
+  /** Where the unit's raw bytes were archived (D9) when an archiver was available. */
+  archiveUrl?: string;
   records: LandedRecord[];
 }
 
 export interface LandContext {
   /** Overlapping fetch window (D12). File-based sources may land the whole unit regardless. */
   window: { from: Date; to: Date };
+  /**
+   * Archive a unit's raw bytes (MinIO in production), returning the stored URL.
+   * Optional — tests and fixture-driven landings run without it; adapters that
+   * land files call it when present and record the URL on the batch (D9).
+   */
+  archive?: (key: string, body: string) => Promise<string>;
 }
 
 /** A raw_records row handed to normalize. */
