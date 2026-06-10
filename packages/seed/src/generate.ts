@@ -337,10 +337,10 @@ export function generateMercadiaDataset(): MercadiaDataset {
   const plantedBreaks: PlantedBreak[] = [
     {
       id: "planted-unbooked-stripe-fee",
-      breakType: "missing_in_ledger",
+      breakType: "unexpected_fee",
       source: "stripe",
       sourceId: "txn_fee_radar_0001",
-      reason: "Stripe Radar fee never booked in the ledger",
+      reason: "Stripe Radar fee never booked in the ledger — ruleset-v2 types unbooked fees precisely",
     },
     {
       id: "planted-unbooked-refund",
@@ -351,7 +351,7 @@ export function generateMercadiaDataset(): MercadiaDataset {
     },
     {
       id: "planted-never-settled-charge",
-      breakType: "missing_in_stripe",
+      breakType: "missing_in_source",
       source: "ledger",
       sourceId: "LED-2026-NS01",
       reason: "Payment booked in the ledger; the charge never settled in Stripe",
@@ -372,17 +372,17 @@ export function generateMercadiaDataset(): MercadiaDataset {
     },
     {
       id: "planted-window-edge-ledger",
-      breakType: "missing_in_stripe",
+      breakType: "missing_in_source",
       source: "ledger",
       sourceId: "LED-2026-CLD2",
       reason: "Booked 48h30m after the charge — just outside the ±48h fallback window (the other half of planted-window-edge-stripe)",
     },
     {
       id: "planted-referenceless-double-post",
-      breakType: "missing_in_stripe",
+      breakType: "missing_in_source",
       source: "ledger",
       sourceId: "LED-2026-CLE2",
-      reason: "True double-post without a reference: ruleset-v1 pairs one copy and reports this one missing_in_stripe — relabeling it duplicate_candidate is a Stage 2 item",
+      reason: "True double-post without a reference: one copy pairs and this one reads missing — flips to duplicate_candidate when the pipeline wires the duplicate heuristic",
     },
   ];
 

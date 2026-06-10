@@ -326,10 +326,15 @@ thousands of generated scenarios).
 
 | Break type | Plain English | Demo example | Typical resolution |
 |---|---|---|---|
-| `missing_in_ledger` | "Money moved at the processor that your books don't show." | Stripe charged an **$8.50** Radar fee (`txn_fee_radar_0001`) nobody booked; a **$66.81** refund (`txn_re_0014`) was issued in Stripe but never booked; `txn_cl_d2`'s booking missed the ±48h window | Book the fee / the refund |
-| `missing_in_stripe` | "Your books claim money moved, but the processor has no record." | `LED-2026-NS01`: a **$111.11** payment booked, but the charge never settled; `LED-2026-CLD2` (the window-edge booking) and `LED-2026-CLE2` (a reference-less double-post — see the seed README) | Reverse or re-collect; investigate why it was booked |
+| `missing_in_ledger` | "Money moved at the processor that your books don't show." | A **$66.81** refund (`txn_re_0014`) issued in Stripe but never booked; `txn_cl_d2`'s booking missed the ±48h window | Book the refund / investigate the late booking |
+| `missing_in_source` | "Your books claim money moved, but the source has no record." | `LED-2026-NS01`: a **$111.11** payment booked, but the charge never settled; `LED-2026-CLD2` (the window-edge booking) and `LED-2026-CLE2` (a reference-less double-post — see the seed README) | Reverse or re-collect; investigate why it was booked |
 | `amount_mismatch` | "Both sides describe the same event but disagree on the amount." | (none planted in the demo) ledger says $49.00, Stripe says $48.90 for the same charge | Find the fee/rounding/entry error; correct the books |
 | `duplicate_candidate` | "The same event appears twice on one side." | `LED-2026-0028-DUP`, the double-posted $85.99 | Reverse the duplicate posting |
+| `unexpected_fee` | "The source charged a fee your books never anticipated." | The **$8.50** Radar fee (`txn_fee_radar_0001`) nobody booked | Book the fee; review the fee schedule |
+| `fx_drift` | "Cross-currency legs disagree beyond what the recorded rate explains." | (arrives with the PagoLat settlement story) | Check the booked rate vs. the recorded run rate |
+
+(`missing_in_stripe` was ruleset-v1's name for the second row; historical runs keep
+it, new runs say `missing_in_source` — the engine reconciles more sources than Stripe.)
 
 Every break stores the full identity, amount, time, and version of each transaction
 involved — enough to explain itself years later without re-deriving anything.
@@ -350,14 +355,15 @@ The demo's actual output:
 ```
 recon run 7e9b0611-…
   as of:    2026-06-05T00:00:00.000Z
-  ruleset:  ruleset-v1
+  ruleset:  ruleset-v2
   ledger: 1 batch(es), 0 raw inserted, 58 unchanged, 0 normalized, 0 quarantined
   stripe: 1 batch(es), 0 raw inserted, 57 unchanged, 0 normalized, 0 quarantined
   matches:  54 (108 transactions)
   breaks:   7
-    - missing_in_ledger: 3
-    - missing_in_stripe: 3
+    - missing_in_ledger: 2
+    - missing_in_source: 3
     - duplicate_candidate: 1
+    - unexpected_fee: 1
 ```
 
 But the summary is just the receipt. The real output is the permanent record in

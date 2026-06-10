@@ -1,6 +1,6 @@
-import type { BreakType, ReconSummary, SourceAdapter } from "@tieout/contracts";
+import type { BreakType, FxRateInput, ReconSummary, SourceAdapter } from "@tieout/contracts";
 import { BREAK_TYPES } from "@tieout/contracts";
-import { reconcile, RULESET_VERSION, type MatchableTxn } from "@tieout/core";
+import { reconcile, RULESET_VERSION, type MatchableTxn, type MatchingConfig } from "@tieout/core";
 import {
   advanceCursor,
   currentWatermark,
@@ -56,6 +56,11 @@ export interface ReconOptions {
   now: Date;
   asOf?: Date;
   windowMs?: number;
+  /** Ruleset-v2 knobs, all recorded in run stats so runs stay self-describing. */
+  toleranceMinor?: bigint;
+  fx?: { rates: FxRateInput[]; toleranceBps: number };
+  lagMsBySource?: Record<string, number>;
+  duplicateWindowMs?: number;
 }
 
 /**
@@ -80,22 +85,38 @@ export async function runRecon(db: Db, opts: ReconOptions): Promise<ReconSummary
     type: t.type,
     status: t.status,
     amountMinor: t.amountMinor,
+    // Rows normalized before the concept existed mean "net equals amount".
+    netMinor: t.netMinor ?? t.amountMinor,
     currency: t.currency,
     occurredAt: t.occurredAt,
     reference: t.reference,
+    groupRef: t.groupRef,
   });
-  const ledger = rows.filter((t) => t.source === "ledger").map(toMatchable);
-  const stripe = rows.filter((t) => t.source === "stripe").map(toMatchable);
+  // Tombstoned versions are the source saying "this no longer exists" — they are
+  // history, not matchable money.
+  const live = rows.filter((t) => !t.isTombstone);
+  const ledger = live.filter((t) => t.source === "ledger").map(toMatchable);
+  const external = live.filter((t) => t.source !== "ledger").map(toMatchable);
 
-  const { matches, breaks } = reconcile(ledger, stripe, {
+  const config: MatchingConfig = {
     windowMs: opts.windowMs ?? DEFAULT_MATCH_WINDOW_MS,
-  });
+    asOf,
+    ...(opts.toleranceMinor !== undefined ? { toleranceMinor: opts.toleranceMinor } : {}),
+    ...(opts.fx !== undefined ? { fx: opts.fx } : {}),
+    ...(opts.lagMsBySource !== undefined ? { lagMsBySource: opts.lagMsBySource } : {}),
+    ...(opts.duplicateWindowMs !== undefined ? { duplicateWindowMs: opts.duplicateWindowMs } : {}),
+  };
+  const { matches, breaks, pending } = reconcile(ledger, external, config);
 
   const breakCounts = Object.fromEntries(BREAK_TYPES.map((t) => [t, 0])) as Record<
     BreakType,
     number
   >;
   for (const b of breaks) breakCounts[b.type] += 1;
+  const pendingBySource: Record<string, number> = {};
+  for (const p of pending) {
+    pendingBySource[p.source] = (pendingBySource[p.source] ?? 0) + 1;
+  }
 
   const { runId } = await persistReconRun(db, {
     asOf,
@@ -103,11 +124,20 @@ export async function runRecon(db: Db, opts: ReconOptions): Promise<ReconSummary
     matches,
     breaks,
     stats: {
-      evaluatedTransactions: rows.length,
+      evaluatedTransactions: live.length,
       ledgerTransactions: ledger.length,
-      stripeTransactions: stripe.length,
+      externalTransactions: external.length,
       matches: matches.length,
       breaks: breakCounts,
+      pendingBySource,
+      pending: pending.map((p) => ({ ...p.ref, source: p.source, sourceId: p.sourceId })),
+      config: {
+        windowMs: config.windowMs,
+        toleranceMinor: (config.toleranceMinor ?? 0n).toString(),
+        fxToleranceBps: config.fx?.toleranceBps ?? null,
+        lagMsBySource: config.lagMsBySource ?? null,
+        duplicateWindowMs: config.duplicateWindowMs ?? null,
+      },
     },
     now: opts.now,
   });
@@ -117,11 +147,10 @@ export async function runRecon(db: Db, opts: ReconOptions): Promise<ReconSummary
     asOf: asOf.toISOString(),
     rulesetVersion: RULESET_VERSION,
     matches: matches.length,
-    matchedTransactions: matches.length * 2,
+    matchedTransactions: matches.reduce((n, m) => n + m.members.length, 0),
     breaks: breakCounts,
     totalBreaks: breaks.length,
-    // Settlement-lag suppression arrives with ruleset-v2; until then nothing is pending.
-    pendingBySource: {},
+    pendingBySource,
   };
 }
 
@@ -179,6 +208,9 @@ export function formatSummary(result: FullReconResult): string {
   lines.push(`  breaks:   ${summary.totalBreaks}`);
   for (const [type, count] of Object.entries(summary.breaks)) {
     if (count > 0) lines.push(`    - ${type}: ${count}`);
+  }
+  for (const [source, count] of Object.entries(summary.pendingBySource)) {
+    lines.push(`  pending:  ${count} (${source}, inside settlement lag)`);
   }
   return lines.join("\n");
 }

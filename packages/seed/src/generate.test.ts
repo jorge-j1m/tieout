@@ -41,10 +41,10 @@ describe("Mercadia dataset", () => {
       "duplicate_candidate",
       "missing_in_ledger",
       "missing_in_ledger",
-      "missing_in_ledger",
-      "missing_in_stripe",
-      "missing_in_stripe",
-      "missing_in_stripe",
+      "missing_in_source",
+      "missing_in_source",
+      "missing_in_source",
+      "unexpected_fee",
     ]);
     const planted = new Set(plantedBreaks.map((b) => b.sourceId));
     expect(planted.size).toBe(plantedBreaks.length);

@@ -14,13 +14,13 @@ doc-consistency test fails the build if any quoted number drifts):
 
 | # | Break type            | Where it shows           | Story                                                        |
 |---|-----------------------|--------------------------|--------------------------------------------------------------|
-| 1 | `missing_in_ledger`   | `txn_fee_radar_0001`     | A Stripe Radar fee nobody ever booked                        |
+| 1 | `unexpected_fee`      | `txn_fee_radar_0001`     | A Stripe Radar fee nobody ever booked                        |
 | 2 | `missing_in_ledger`   | `txn_re_0014`            | A refund issued in Stripe, never booked in the ledger        |
-| 3 | `missing_in_stripe`   | `LED-2026-NS01`          | A payment booked in the ledger; the charge never settled     |
+| 3 | `missing_in_source`   | `LED-2026-NS01`          | A payment booked in the ledger; the charge never settled     |
 | 4 | `duplicate_candidate` | `LED-2026-0028-DUP`      | The same charge posted twice in the ledger                   |
 | 5 | `missing_in_ledger`   | `txn_cl_d2`              | Its manual booking landed 48h30m later — just outside the ±48h window |
-| 6 | `missing_in_stripe`   | `LED-2026-CLD2`          | The other half of #5: the booking just outside the window    |
-| 7 | `missing_in_stripe`   | `LED-2026-CLE2`          | A reference-less double-post: ruleset-v1 pairs one copy and labels this one missing — relabeling is a Stage 2 item |
+| 6 | `missing_in_source`   | `LED-2026-CLD2`          | The other half of #5: the booking just outside the window    |
+| 7 | `missing_in_source`   | `LED-2026-CLE2`          | A reference-less double-post: one copy pairs and this one reads missing — flips to `duplicate_candidate` once the pipeline wires the duplicate heuristic |
 
 Everything else ties out: 44 records match on exact reference — the referenced charges
 (including a same-amount flash-sale cluster) plus the refunds booked on both sides —
