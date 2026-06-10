@@ -5,6 +5,7 @@ import { quarantinedRecords, rawRecords, sourceCursors, transactions } from "../
 import { advanceCursor } from "../services/cursors.js";
 import { landBatch } from "../services/ingest.js";
 import { normalizeBatch } from "../services/normalize.js";
+import { loadTransactionsAsOf } from "../services/recon.js";
 import { connectTestDb, truncateAll, type TestDb } from "./helpers.js";
 
 const NOW = new Date("2026-06-01T00:00:00Z");
@@ -230,6 +231,140 @@ describe("ingestion services", () => {
     );
     const result = await normalizeBatch(db, stubAdapter, w2.batchId, LATER);
     expect(result).toMatchObject({ normalized: 1, superseded: 1, unchanged: 0 });
+  });
+
+  it("a restated complete unit tombstones identities that vanished — and only those", async () => {
+    const { db } = client;
+    const unit = { key: "ledger:entries.json" };
+    await landBatch(
+      db,
+      batch("ledger:v1", [record("e1", { amountMinor: "1000" }), record("e2", { amountMinor: "2000" })], {
+        completeUnit: unit,
+      }),
+      NOW,
+    );
+    // The restated file no longer contains e2.
+    const restated = await landBatch(
+      db,
+      batch("ledger:v2", [record("e1", { amountMinor: "1000" })], { completeUnit: unit }),
+      LATER,
+    );
+    expect(restated).toMatchObject({ rawInserted: 0, rawSkipped: 1, tombstoned: 1 });
+
+    const raws = await db
+      .select()
+      .from(rawRecords)
+      .where(eq(rawRecords.sourceId, "e2"))
+      .orderBy(asc(rawRecords.version));
+    expect(raws).toHaveLength(2);
+    expect(raws[1]).toMatchObject({ version: 2, isTombstone: true });
+    expect(raws[1]!.payload).toMatchObject({ tombstone: true, unitKey: unit.key });
+
+    // Re-landing the same restated unit converges: the tombstone is already latest.
+    const again = await landBatch(
+      db,
+      batch("ledger:v2", [record("e1", { amountMinor: "1000" })], { completeUnit: unit }),
+      LATER,
+    );
+    expect(again).toMatchObject({ batchExisted: true, tombstoned: 0 });
+  });
+
+  it("a tombstone raw becomes a tombstone transaction version superseding the live one", async () => {
+    const { db } = client;
+    const unit = { key: "ledger:entries.json" };
+    const v1 = await landBatch(
+      db,
+      batch("ledger:v1", [record("e1", { amountMinor: "1000" })], { completeUnit: unit }),
+      NOW,
+    );
+    await normalizeBatch(db, stubAdapter, v1.batchId, NOW);
+
+    const v2 = await landBatch(db, batch("ledger:v2", [], { completeUnit: unit }), LATER);
+    expect(v2.tombstoned).toBe(1);
+    const result = await normalizeBatch(db, stubAdapter, v2.batchId, LATER);
+    expect(result).toMatchObject({ normalized: 0, tombstoned: 1, superseded: 1 });
+
+    const versions = await db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.sourceId, "e1"))
+      .orderBy(asc(transactions.version));
+    expect(versions).toHaveLength(2);
+    expect(versions[0]).toMatchObject({ version: 1, isCurrent: false, isTombstone: false });
+    expect(versions[1]).toMatchObject({
+      version: 2,
+      isCurrent: true,
+      isTombstone: true,
+      // The tombstone carries the predecessor's money facts forward.
+      amountMinor: 1000n,
+    });
+  });
+
+  it("re-executing a pre-tombstone watermark still sees the live version (D27 holds)", async () => {
+    const { db } = client;
+    const unit = { key: "ledger:entries.json" };
+    const v1 = await landBatch(
+      db,
+      batch("ledger:v1", [record("e1", { amountMinor: "1000" })], { completeUnit: unit }),
+      NOW,
+    );
+    await normalizeBatch(db, stubAdapter, v1.batchId, NOW);
+    const v2 = await landBatch(db, batch("ledger:v2", [], { completeUnit: unit }), LATER);
+    await normalizeBatch(db, stubAdapter, v2.batchId, LATER);
+
+    const atV1 = await loadTransactionsAsOf(db, NOW);
+    expect(atV1).toHaveLength(1);
+    expect(atV1[0]).toMatchObject({ version: 1, isTombstone: false });
+
+    const atV2 = await loadTransactionsAsOf(db, LATER);
+    expect(atV2).toHaveLength(1);
+    expect(atV2[0]).toMatchObject({ version: 2, isTombstone: true });
+  });
+
+  it("a vanished identity that only ever quarantined has nothing to tombstone", async () => {
+    const { db } = client;
+    const unit = { key: "ledger:entries.json" };
+    const v1 = await landBatch(
+      db,
+      batch("ledger:v1", [record("e_bad", { bad: true })], { completeUnit: unit }),
+      NOW,
+    );
+    await normalizeBatch(db, stubAdapter, v1.batchId, NOW);
+    const v2 = await landBatch(db, batch("ledger:v2", [], { completeUnit: unit }), LATER);
+    expect(v2.tombstoned).toBe(1); // the raw disappearance is still recorded
+    const result = await normalizeBatch(db, stubAdapter, v2.batchId, LATER);
+    expect(result).toMatchObject({ tombstoned: 0, normalized: 0 });
+    expect(await db.select().from(transactions)).toHaveLength(0);
+  });
+
+  it("a later delivery resurrects a tombstoned identity as a normal new version", async () => {
+    const { db } = client;
+    const unit = { key: "ledger:entries.json" };
+    const v1 = await landBatch(
+      db,
+      batch("ledger:v1", [record("e1", { amountMinor: "1000" })], { completeUnit: unit }),
+      NOW,
+    );
+    await normalizeBatch(db, stubAdapter, v1.batchId, NOW);
+    const v2 = await landBatch(db, batch("ledger:v2", [], { completeUnit: unit }), LATER);
+    await normalizeBatch(db, stubAdapter, v2.batchId, LATER);
+
+    const EVEN_LATER = new Date("2026-06-03T00:00:00Z");
+    const v3 = await landBatch(
+      db,
+      batch("ledger:v3", [record("e1", { amountMinor: "1000" })], { completeUnit: unit }),
+      EVEN_LATER,
+    );
+    expect(v3).toMatchObject({ rawInserted: 1, tombstoned: 0 });
+    const result = await normalizeBatch(db, stubAdapter, v3.batchId, EVEN_LATER);
+    expect(result).toMatchObject({ normalized: 1, superseded: 1, tombstoned: 0 });
+
+    const current = await db
+      .select()
+      .from(transactions)
+      .where(and(eq(transactions.sourceId, "e1"), eq(transactions.isCurrent, true)));
+    expect(current).toHaveLength(1);
+    expect(current[0]).toMatchObject({ version: 3, isTombstone: false, amountMinor: 1000n });
   });
 
   it("cursors only move forward", async () => {

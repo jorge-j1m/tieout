@@ -6,7 +6,8 @@ export { connectTestDb, type TestDb } from "../testing.js";
 
 export async function truncateAll(db: Db): Promise<void> {
   await db.execute(sql`
-    TRUNCATE TABLE match_members, matches, breaks, recon_runs,
+    TRUNCATE TABLE exception_events, exceptions, outbox, fx_rates,
+      match_members, matches, breaks, recon_runs,
       quarantined_records, transactions, raw_records, ingestion_batches, source_cursors
     CASCADE
   `);

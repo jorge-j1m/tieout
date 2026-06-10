@@ -22,7 +22,7 @@ Dense by design. One entry per decision, with why. If a decision changes, edit t
 
 ## Ingestion spine
 
-**D8 — Sources emit observations, not facts. The spine is append-only and versioned.** Tables: `ingestion_batches` → `raw_records` → `transactions`, plus `quarantined_records` and `source_cursors`. Financial rows are never UPDATEd or DELETEd; a changed payload (detected by content hash) inserts version n+1 and flips `isCurrent`. Records that vanish from a restated feed get a tombstone version. Statuses are not monotonic (settled → reversed is real).
+**D8 — Sources emit observations, not facts. The spine is append-only and versioned.** Tables: `ingestion_batches` → `raw_records` → `transactions`, plus `quarantined_records` and `source_cursors`. Financial rows are never UPDATEd or DELETEd; a changed payload (detected by content hash) inserts version n+1 and flips `isCurrent`. Records that vanish from a restated feed get a tombstone version — implemented (Stage 2) by batches declaring a `completeUnit` key: landing diffs the delivery against the unit's previous landings, vanished identities get tombstone raw versions, normalization turns them into tombstone transaction versions (current, carrying the predecessor's money facts, excluded from matching), and a later delivery resurrects the identity as a normal version. Statuses are not monotonic (settled → reversed is real).
 
 **D9 — Raw first, normalize second.** Land payloads exactly as received (`raw_records`, files archived in MinIO), then normalize deterministically. Every transaction carries `rawId` + `normalizerVersion`, so normalizer bugs are fixed by re-normalizing from raw — never by re-fetching, never untraceably.
 

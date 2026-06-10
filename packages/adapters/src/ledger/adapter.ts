@@ -115,8 +115,10 @@ export function createLedgerAdapter(config: LedgerAdapterConfig): SourceAdapter 
     source: LEDGER_SOURCE,
     normalizerVersion: LEDGER_NORMALIZER_VERSION,
 
-    // Lands the whole file as one unit keyed by its content hash: a re-issued
-    // (restated) file is a new unit; re-landing the same one converges.
+    // Lands the whole file as one unit. The idempotency key is the content hash
+    // (a re-issued file is a new landing); the complete-unit key is the file's
+    // NAME, stable across restatements, so identities that vanish from a
+    // re-issued file get tombstone versions (D8).
     async land(_ctx) {
       const entries: unknown = JSON.parse(await readFile(config.dataFile, "utf8"));
       if (!Array.isArray(entries)) {
@@ -130,6 +132,7 @@ export function createLedgerAdapter(config: LedgerAdapterConfig): SourceAdapter 
           kind: "file",
           externalRef: path.basename(config.dataFile),
           idempotencyKey: `ledger:file:${fileHash}`,
+          completeUnit: { key: `ledger:${path.basename(config.dataFile)}` },
           controlTotals: { entryCount: entries.length },
           records: entries.map((e: unknown, index) => {
             const candidate = (e as { entryId?: unknown; account?: unknown }) ?? {};

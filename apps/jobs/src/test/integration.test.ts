@@ -61,7 +61,8 @@ describe("Stage 1 acceptance: full pipeline over the seed dataset", () => {
   beforeAll(async () => {
     client = await connectTestDb();
     await client.db.execute(dsql`
-      TRUNCATE TABLE match_members, matches, breaks, recon_runs,
+      TRUNCATE TABLE exception_events, exceptions, outbox, fx_rates,
+        match_members, matches, breaks, recon_runs,
         quarantined_records, transactions, raw_records, ingestion_batches, source_cursors
       CASCADE
     `);
