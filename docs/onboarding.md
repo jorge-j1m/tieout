@@ -73,7 +73,7 @@ parameter). That purity is what makes its property tests trustworthy; don't erod
 | Canonical transaction, enums, adapter interface | `packages/contracts/src/{txn,canonical,adapter,recon}.ts` | consumers' tests; `normalizedTxnSchema.parse` runs inside every adapter |
 | Rule 1: money as bigint minor units (§3) | `packages/core/src/money.ts` (`CURRENCY_EXPONENTS`, `parseDecimalToMinor`, `minorToDecimalString`) | `money.test.ts` round-trip properties |
 | Content hashes, synthetic ids (§4, Rule 4) | `packages/core/src/hash.ts` (`contentHash`, `syntheticSourceId`) | `hash.test.ts` |
-| Matching ruleset v1, all four passes (§6) | `packages/core/src/matching.ts` (`reconcile`, `RULESET_VERSION`) | `matching.test.ts` — unit cases per pass + partition/determinism properties |
+| Matching ruleset v2, all five passes incl. groups/fx/lag (§6) | `packages/core/src/matching.ts` (`reconcile`, `RULESET_VERSION`) | `matching.test.ts` — unit cases per pass + partition/determinism/group-sum properties over three pools |
 | The spine schema and its constraints (§5.3) | `packages/db/src/schema.ts`; migrations in `packages/db/drizzle/` | `db/src/test/schema.test.ts` proves each constraint rejects |
 | Landing: batches, raw versioning, idempotency (§4) | `packages/db/src/services/ingest.ts` (`landBatch`) | `db/src/test/services.test.ts` (re-land, crash-retry, restatement) |
 | Normalization persistence: versions, supersession, quarantine rows (§5) | `packages/db/src/services/normalize.ts` (`normalizeBatch`) | same file |
@@ -88,10 +88,10 @@ parameter). That purity is what makes its property tests trustworthy; don't erod
 | PagoLat dialect: control totals, locale decimals, synthetic ids (§5, D13) | `packages/adapters/src/pagolat/adapter.ts` | golden files in `fixtures/pagolat/` + unit tests |
 | Golden-test harness | `packages/adapters/src/test/golden.ts` | — |
 | Mercadia dataset + planted breaks (§ demo) | `packages/seed/src/generate.ts`; committed output in `packages/seed/data/`; manifest contract in `data/manifest.json` | `seed/src/generate.test.ts` (determinism + committed-files freshness) |
-| Pipeline: land → normalize → recon glue (§9) | `apps/jobs/src/pipeline/pipeline.ts` (also `DEFAULT_MATCH_WINDOW_MS`) | the integration test drives exactly this |
+| Pipeline: land → normalize → recon glue, ruleset knob defaults (§9) | `apps/jobs/src/pipeline/pipeline.ts` (`DEFAULT_MATCH_WINDOW_MS`, `DEFAULT_DUPLICATE_WINDOW_MS`, `DEFAULT_FX_TOLERANCE_BPS`) | the integration test drives exactly this |
 | Trigger.dev tasks (§9) | `apps/jobs/src/trigger/*.ts` (thin wrappers — keep them thin) | — |
 | `pnpm recon` CLI | `apps/jobs/src/cli/recon.ts` | — |
-| Stage 1 acceptance, end to end | `apps/jobs/src/test/integration.test.ts` | itself |
+| Stage acceptance, end to end (incl. tombstones, lag, outbox sweep, replay) | `apps/jobs/src/test/integration.test.ts` | itself |
 
 Rule of thumb for *where new logic goes*: if it's a decision (matching, money,
 classification) → `core`. If it's a source dialect → that adapter. If it's "write/read
@@ -115,10 +115,11 @@ will otherwise bite you.
    `UPDATE_GOLDEN=1 pnpm --filter @tieout/adapters test`, then `git diff fixtures/`.
 4. Add a fixture case if your change has a new edge (one good case in `entries.json` /
    `balance-transactions.json`, one drift case in `drift.json`).
-5. Verify: `turbo run typecheck lint test`, then `pnpm recon` — re-normalization will
-   create version n+1 transactions superseding the old ones; the integration test's
-   "everything is v1" assertion only holds on a truncated database, which the test does
-   itself.
+5. Verify: `turbo run typecheck lint test`, then `pnpm recon` — re-normalization
+   re-translates every raw and creates version n+1 transactions only where the output
+   actually changed (D26); each supersession also emits an outbox event. The
+   integration test's version/current-count assertions hold on the fresh database the
+   test builds itself.
 
 ### 3.2 Change the matching rules
 
@@ -153,20 +154,26 @@ will otherwise bite you.
    `transactions` (Rule 2). Backfills happen by re-normalizing from raw, not by SQL
    surgery on financial rows.
 
-### 3.4 Add a new source adapter (the Stage 2 workhorse)
+### 3.4 Add a new source adapter
 
 1. Create `packages/adapters/src/<source>/adapter.ts` implementing `SourceAdapter`
    from contracts: `land()` (may do I/O) + `normalize()` (pure, deterministic, no
-   clock). Copy the ledger adapter's shape — defensive identity extraction at landing,
-   full Zod validation + data-driven maps at normalize, `normalizedTxnSchema.parse` on
-   the way out.
-2. Choose the idempotency key for a unit of work: file hash for files,
+   clock). For an API source, copy the stripe adapter's shape; for a settlement-file
+   source, copy **pagolat** — it models everything files throw at you: control totals
+   verified at landing (`integrityFailure` → whole-batch quarantine, D13), locale
+   decimals, local-time conversion at the door, `completeUnit` for restatement
+   tombstones, `groupRef` for N:1 settlement matching, and the optional `ctx.archive`
+   hook. Always: full Zod validation + data-driven maps at normalize,
+   `normalizedTxnSchema.parse` on the way out, `netMinor` spelled out when the source
+   nets its fees in-record.
+2. Choose the idempotency key for a unit of work: `unit:contentHash` for files,
    `source:account:window` for APIs (D25).
-3. Id-less lines (bank CSVs): `syntheticSourceId(fileIdentity, lineContent,
-   occurrenceIndex)` — the occurrence index is what keeps legitimate duplicate lines
-   apart.
-4. Fixtures: `fixtures/<source>/` with good + drift files; golden tests via
-   `expectGolden` (see either existing adapter test — they're ~40 lines).
+3. Id-less lines: `syntheticSourceId(unitKey, lineContent, occurrenceIndex)` — the
+   occurrence index keeps legitimate duplicate lines apart, and the file-identity
+   component must be the STABLE unit key, never the content hash, or a restated file
+   would re-identify every surviving line (see the pagolat adapter's comment).
+4. Fixtures: `fixtures/<source>/` with good + drift files (+ a lying-control-totals
+   file if applicable); golden tests via `expectGolden`.
 5. Register it in `apps/jobs/src/pipeline/adapters.ts`, add a `land-<source>` task,
    extend the seed generator if the demo should include it (recipe 3.6).
 6. Export it from `packages/adapters/src/index.ts`.
@@ -187,9 +194,14 @@ will otherwise bite you.
    the order index — no `Date.now()`, no randomness. Bulk amounts stay unique
    (`4900 + i·137`) so the easy volume is unambiguous; the adversarial cluster
    collides amounts *on purpose* — extend it (with new amounts outside the bulk
-   residue class) rather than diluting it.
-2. `pnpm seed` to rewrite `packages/seed/data/` — commit generator **and** data
-   together; the freshness test fails the build if they drift.
+   residue class) rather than diluting it. PagoLat nets are multiples of 2500 so
+   MXN→USD at 0.0588 converts exactly — keep that property or expectations start
+   depending on rounding direction. No settlement-lag scenarios in the manifest: the
+   demo watermark is the wall clock (lag is proven by the integration suite with
+   pinned `asOf` values).
+2. `pnpm seed` to rewrite `packages/seed/data/` (JSON + the PagoLat day-files +
+   `fx.rates.json`) — commit generator **and** data together; the freshness test
+   fails the build if they drift.
 3. If you changed the planted breaks or the totals: the generator computes all of
    `manifest.json` (planted breaks + the `expected` totals) — update
    `packages/seed/README.md`'s table and the numbers quoted in `how-it-works.md` §7
@@ -211,7 +223,8 @@ will otherwise bite you.
 You almost never touch stored rows. Decision tree:
 
 - Source sent wrong data → it will (or should) restate; landing creates version n+1
-  automatically. Nothing to code.
+  automatically — and if the restated unit *removed* records, complete-unit diffing
+  tombstones them. Nothing to code.
 - *We* normalized it wrong → recipe 3.1 (bump normalizer version, re-run).
 - We matched it wrong → recipe 3.2 (bump ruleset, re-run recon; old runs stay as the
   record of what v1 concluded).
@@ -249,8 +262,14 @@ rejected, so iterate boldly and read failures as information.
 | create two "current" versions of one identity | partial unique index `transactions_current_identity_uq` |
 | normalize the same raw twice with one normalizer version | unique `transactions_raw_normalizer_uq` |
 | put one transaction in two matches in a run | unique `match_members_run_txn_uq` |
-| make matching order-dependent or non-deterministic | the shuffle property test |
-| let a transaction vanish from the match/break partition | the partition property test |
+| report the same logical break twice in one run | partial unique `breaks_run_fingerprint_uq` |
+| open two exceptions for one logical break | unique `exceptions_fingerprint_uq` |
+| make matching order-dependent or non-deterministic | the shuffle property test (three pools, groups included) |
+| let a transaction vanish from the match/break/pending partition | the partition property test |
+| break a group's sum without breaking the match | the group-sum preservation property |
+| land half of a file that fails its own control totals | whole-batch quarantine (D13) |
+| trust the parseable remainder of a drifted feed | the circuit breaker halts the batch (D14) |
+| resurrect a tombstoned record by re-landing an old file | the latest-delivery rule; the integration re-run test |
 | change adapter output without noticing the blast radius | golden-file diffs |
 | edit the seed generator but not the committed data (or vice versa) | the freshness test |
 | quote demo numbers in a doc that drift from the dataset | the seed doc-consistency test |

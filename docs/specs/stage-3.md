@@ -1,7 +1,7 @@
 # Spec: Stage 3 — show your work
 
-> **Status: not active.** Stage 1 is the active spec; Stage 2 (`stage-2.md`) comes
-> first. This document exists so Stage 2 decisions are made with the destination in view.
+> **Status: not active.** Stage 2 (`stage-2.md`) is the active spec. This document
+> exists so Stage 2 decisions are made with the destination in view.
 
 **Goal.** A stranger opens a public URL and lands — no signup — in a read-only CFO
 persona over synthetic Mercadia data: a nightly run, a handful of breaks, each one

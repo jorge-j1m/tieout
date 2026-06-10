@@ -7,9 +7,12 @@ How the system runs, stage by stage. The repo deploys to a single Ubuntu box ("t
 - **dev** — code runs on the box via `pnpm dev` (`trigger.dev dev` executes tasks locally against Trigger.dev Cloud's orchestration; dev runs are not billed). Postgres + MinIO from the compose file below.
 - **prod (Stage 3+)** — same box, containers built by CI, tasks deployed to Trigger.dev (Cloud until Stage 4).
 
-## Stage 1 compose (current)
+## Compose (current, Stages 1–2)
 
 One compose project, infrastructure only — app code runs on the host during dev.
+(MinIO is provisioned for the raw-file archive; the archive *client* is deferred —
+the demo's settlement files are git-committed, so the repo is already their archive.
+It wires up with the first source whose files live outside the repo.)
 
 ```yaml
 # docker-compose.yml
@@ -64,11 +67,13 @@ Committed as `.env.example`, real values in `.env` (gitignored). Current set:
 ```
 POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB
 DATABASE_URL=postgres://...@127.0.0.1:5432/tieout
+TEST_DATABASE_URL=                  # optional; tests default to "<db>_test" or in-memory PGlite (D28)
 MINIO_ROOT_USER / MINIO_ROOT_PASSWORD
-S3_ENDPOINT=http://127.0.0.1:9000   # raw file archive
+S3_ENDPOINT=http://127.0.0.1:9000   # raw file archive (client deferred — see above)
 TRIGGER_PROJECT_REF=                # from Trigger.dev Cloud project (proj_…)
 TRIGGER_SECRET_KEY=                 # from Trigger.dev Cloud project
-STRIPE_SECRET_KEY=sk_test_...       # TEST MODE ONLY — never a live key
+STRIPE_SECRET_KEY=sk_test_...       # TEST MODE ONLY — the adapter refuses other keys
+STRIPE_LIVE_LANDING=                # =1 makes the hourly land-stripe poll the real test-mode API
 SLACK_WEBHOOK_URL=                  # run summaries / failures
 ```
 

@@ -36,9 +36,9 @@ Three record-keepers ("**sources**"), watched by one engine:
 |---|---|---|
 | **The ledger** | Mercadia's own books — its internal system of record | "Entry LED-2026-0001: customer payment, **$49.00**, booked May 1, reference `ch_mercadia_0001`" |
 | **Stripe** | The payment processor that actually handles the cards | "Balance transaction `txn_ch_0001`: charge, **+4900** cents, May 1, from charge `ch_mercadia_0001`" |
-| **PagoLat** | The LatAm settlement PSP — daily files, MXN, locale decimals, no line ids | "`LINE;2026-05-21 09:15:00;sale;plord_801;1.250,00;36,25;1.213,75`" inside a day-file with header/footer control totals |
+| **PagoLat** | The LatAm settlement PSP — daily files, MXN, locale decimals, no line ids | "`LINE;2026-05-21 10:00:00;sale;plord_20260521_1;1000,00;25,00;975,00`" inside a day-file with header/footer control totals |
 
-Neither side is "the truth." They are two **witnesses** to the same events, and each one
+None of them is "the truth." They are **witnesses** to the same events, and each one
 can be wrong, late, or incomplete in its own way. Tieout's job is to cross-examine them.
 
 The engine itself is three steps run in order — **Land → Normalize → Reconcile** — plus
@@ -46,12 +46,13 @@ a permanent filing cabinet (a Postgres database that Tieout owns) where every pi
 evidence is kept forever:
 
 ```
-  Mercadia's ledger export              Stripe balance transactions
-          │                                       │
-          ▼                                       ▼
+  Mercadia's ledger export    Stripe balance transactions    PagoLat day-files
+          │                              │                          │
+          ▼                              ▼                          ▼
   ┌─────────────────────── 1. LAND ───────────────────────────┐
   │ Store every record exactly as received — byte for byte,   │
-  │ append-only, fingerprinted. Nothing interpreted yet.      │
+  │ append-only, fingerprinted. Files must pass their own      │
+  │ control totals to get in. Nothing interpreted yet.        │
   └────────────────────────────┬───────────────────────────────┘
                                ▼
   ┌─────────────────────  2. NORMALIZE  ───────────────────────┐
@@ -60,11 +61,12 @@ evidence is kept forever:
   └────────────────────────────┬───────────────────────────────┘
                                ▼
   ┌─────────────────────  3. RECONCILE  ───────────────────────┐
-  │ Take a snapshot, match ledger vs Stripe, and permanently    │
-  │ record the matches and the typed breaks.                   │
+  │ Take a snapshot, match the ledger against every source,    │
+  │ permanently record the matches and the typed breaks, and   │
+  │ keep the exceptions worklist in step with the facts.       │
   └────────────────────────────┬───────────────────────────────┘
                                ▼
-        run summary (console / Slack) · a worklist of breaks
+   run summary (console / Slack) · the exceptions worklist
 ```
 
 ## 3. The rule book
@@ -85,8 +87,9 @@ to quarantine, **never** something to round.
 The database is append-only: corrections are *new versions*, and even data that
 disappears from a source gets a "tombstone" version recording its disappearance. The
 audit trail is the product; an UPDATE would be erasing evidence. (The only sanctioned
-change to an existing row is flipping its "this is the current version" flag when a
-newer version arrives — see §5.4.)
+change to an existing financial row is flipping its "this is the current version" flag
+when a newer version arrives — see §5.2; the exhaustive list of everything that may
+ever change is in §10.)
 
 **Rule 3 — Keep the original before any translation.**
 Every record is stored raw — exactly as the source sent it — *before* Tieout interprets
@@ -147,28 +150,38 @@ identical output.
 
 ## 4. Step 1 — Landing: getting data in
 
-**What comes in.** In Stage 1, two feeds:
+**What comes in.** Three feeds:
 
 - **Ledger**: a JSON export of Mercadia's internal ledger entries (a file).
 - **Stripe**: *balance transactions* — Stripe's own money-movement journal (every
-  charge, refund, fee, and payout as it affects the Stripe balance). In Stage 1 this is
-  a committed, deterministic fixture shaped exactly like the real API response, so
-  nothing needs the network; the live API client will later replace only the "fetch"
-  part, nothing downstream.
+  charge, refund, fee, and payout as it affects the Stripe balance). The demo lands a
+  committed, deterministic fixture shaped exactly like the real API response, so
+  nothing needs the network; with `STRIPE_LIVE_LANDING=1` the same adapter polls the
+  real API (test mode only — it refuses any other kind of key), and everything
+  downstream is identical.
+- **PagoLat**: daily settlement files — semicolon-delimited, MXN, locale decimals
+  (`1.234,56`), local timestamps with a declared UTC offset, **no line ids**, and
+  header/footer **control totals** the file uses to vouch for itself.
 
-**When.** In Stage 1 both feeds land on demand (as part of any full pipeline run, e.g.
-the `pnpm recon` command or the `recon-all` job) — an hourly poll against a committed
-fixture would be a no-op, so the schedule arrives with the live Stripe client in
-Stage 2. The landing task is already windowed for that future: each poll re-covers a
-**48-hour lookback window** on purpose, because data arrives late and out of order
-(Rule 5), and re-seeing the same records is free thanks to Rule 7.
+**When.** The demo lands everything on demand (any full pipeline run — `pnpm recon`
+or the `recon-all` job). The hourly `land-stripe` schedule polls the live API when
+the env opts in, and is an explicit no-op otherwise. Each poll re-covers a **48-hour
+lookback window** on purpose, because data arrives late and out of order (Rule 5),
+and re-seeing the same records is free thanks to Rule 7.
+
+**The door has standards (control totals).** A settlement file declares its own
+arithmetic — line count, total, opening + total = closing. Landing verifies it
+*before* accepting anything: a file that fails its own math is quarantined **whole**
+(one batch-level quarantine row with the precise contradictions, zero raw records),
+because landing half of a lying file would manufacture false breaks. The demo plants
+exactly such a file; the corrected re-issue simply lands later as a new, clean unit.
 
 **What "landing" stores.** Each unit of work (one file, one API window) becomes an
 **ingestion batch**, and every record in it becomes a **raw record**:
 
 | Stored thing | What it is | Example |
 |---|---|---|
-| Ingestion batch | "On June 5 we landed file X from source Y" — with the unit's idempotency key, a content fingerprint, and any control totals the source declares (e.g. "this file says it has 45 entries") | `ledger:file:9f3ab2…`, 45 entries |
+| Ingestion batch | "On June 5 we landed file X from source Y" — with the unit's idempotency key, a content fingerprint, and any control totals the source declares (e.g. "this file says it has 64 entries") | `ledger:file:9f3ab2…`, 64 entries |
 | Raw record | One record, payload byte-for-byte as received, plus its identity and version | `(ledger, mercadia:operating, LED-2026-0001) v1` |
 
 **The content-hash trick.** Every payload is fingerprinted (a SHA-256 hash of its
@@ -181,10 +194,22 @@ canonical form). When a record arrives whose identity Tieout already knows:
 **Example — a restated file.** PSPs really do re-issue settlement files with
 corrections. Suppose the ledger export is re-sent and entry `LED-2026-0001` now reads
 $48.90 instead of $49.00. The new file has a different content hash, so it's a new
-batch; 44 of its 45 entries are unchanged (skipped), and `LED-2026-0001` gets a raw
-**v2** with the new payload. Both versions exist forever; nothing was overwritten.
+batch; every unchanged entry is skipped, and `LED-2026-0001` gets a raw **v2** with
+the new payload. Both versions exist forever; nothing was overwritten.
 
-**Example — a crash mid-landing.** A landing job dies after writing 20 of 45 records.
+**Example — a restated file with a line REMOVED.** File sources declare themselves
+as **complete units** ("this is the entire 05-25 settlement"). When a re-issue
+arrives without a line the previous delivery had, that disappearance is itself an
+observation: the vanished identity gets a **tombstone** version (Rule 2 — never a
+deletion), it stops being matchable money, and the corrected booking now groups
+cleanly against the surviving lines. If a later delivery brings the line back, it
+resurrects as a normal new version on top. One more guard, learned the hard way:
+only the unit's **latest** delivery gets a say — re-landing an old file on a
+pipeline re-run cannot resurrect what a newer delivery removed. The demo's restated
+05-25 PagoLat file exercises this whole path, and a test proves re-running changes
+nothing.
+
+**Example — a crash mid-landing.** A landing job dies after writing 20 of 64 records.
 The retry presents the same idempotency key, finds the half-finished batch, skips the
 20 already-landed records, and writes the missing 25. Final state: identical to one
 clean run. (This convergence is covered by an automated test.)
@@ -198,19 +223,21 @@ catch stragglers.
 Raw records are in each source's dialect. Normalization translates each one into the
 single canonical transaction shape that everything downstream speaks:
 
-| Canonical field | Meaning | Ledger example | Stripe example |
-|---|---|---|---|
-| `source` / `sourceAccount` / `sourceId` | identity (Rule 4) | `ledger / mercadia:operating / LED-2026-0001` | `stripe / acct_mercadia / txn_ch_0001` |
-| `sourceType` | the source's own word, kept verbatim | `payment` | `charge` |
-| `type` | canonical type: `payment, refund, payout, fee, transfer, reversal, adjustment` | `payment` | `payment` |
-| `amountMinor` | integer, smallest unit, **signed from Mercadia's point of view** (money in = positive) | `4900` | `4900` |
-| `currency` | native currency, ISO code | `USD` | `USD` (uppercased from `usd`) |
-| `occurredAt` | event time, UTC | booked-at timestamp | charge-created timestamp |
-| `valueDate` | the banking "value date", when the source has one | booking date | the day Stripe makes funds available |
-| `account` | which account's money story this is | `mercadia:operating` | `acct_mercadia` |
-| `reference` | the cross-system claim ("I am about charge X") | `ch_mercadia_0001` | `ch_mercadia_0001` |
-| `status` | canonical: `pending, settled, failed, reversed` | `posted` → `settled` | `available` → `settled` |
-| `metadata` | source extras worth keeping (description, Stripe's fee/net, …) | description | fee `172`, net `4728` |
+| Canonical field | Meaning | Ledger example | Stripe example | PagoLat example |
+|---|---|---|---|---|
+| `source` / `sourceAccount` / `sourceId` | identity (Rule 4) | `ledger / mercadia:operating / LED-2026-0001` | `stripe / acct_mercadia / txn_ch_0001` | `pagolat / mx-merchant-014 / syn_…` (synthetic — lines have no ids) |
+| `sourceType` | the source's own word, kept verbatim | `payment` | `charge` | `sale` |
+| `type` | canonical type: `payment, refund, payout, fee, transfer, reversal, adjustment` | `payment` | `payment` | `payment` |
+| `amountMinor` | integer, smallest unit, **signed from Mercadia's point of view** (money in = positive) | `4900` | `4900` | `100000` (gross, MXN cents) |
+| `netMinor` | the amount net of the source's own fees — what actually arrives | same as amount | `4728` (after Stripe's `172` fee) | `97500` (after the `2500` commission) |
+| `currency` | native currency, ISO code — **never converted at ingestion** (Rule 10) | `USD` | `USD` (uppercased from `usd`) | `MXN` |
+| `occurredAt` | event time, UTC | booked-at timestamp | charge-created timestamp | local time + the file's declared offset, converted once (Rule 9) |
+| `valueDate` | the banking "value date", when the source has one | booking date | the day Stripe makes funds available | the settlement date |
+| `account` | which account's money story this is | `mercadia:operating` | `acct_mercadia` | `mx-merchant-014` |
+| `reference` | the cross-system claim ("I am about charge X") | `ch_mercadia_0001` | `ch_mercadia_0001` | the PSP's order ref, or null |
+| `groupRef` | the settlement/payout unit this record belongs to — what grouped matching buckets on | null (the booking's `reference` names the group instead) | null | `PL-mx-merchant-014-2026-05-21` |
+| `status` | canonical: `pending, settled, failed, reversed` | `posted` → `settled` | `available` → `settled` | `settled` (a settlement file reports moved money) |
+| `metadata` | source extras worth keeping (description, fees, …) | description | fee `172`, net `4728` | description, commission |
 
 Two details worth pausing on:
 
@@ -220,7 +247,7 @@ Two details worth pausing on:
   (Rule 6). When Stripe invents a new transaction type, Tieout's reaction is "a human
   should look at this," not a silent default.
 - **The translator is versioned.** Every transaction records `normalizerVersion`
-  (currently `ledger-v1` / `stripe-v1`). Found a translation bug? Bump the version and
+  (currently `ledger-v1` / `stripe-v1` / `pagolat-v1`). Found a translation bug? Bump the version and
   re-run: every raw record gets re-translated, and any whose translation actually
   *differs* gains a new, traceable version (Rule 3). Re-translations whose output is
   identical to what's already recorded write nothing — the trail records *change*, not
@@ -239,9 +266,18 @@ precise reasons. Real examples from the test fixtures:
 | currency `DOGE` | "unknown currency: DOGE" |
 | timestamp `09:15+02:00` | invalid — the ledger contract is UTC (Rule 9) |
 | Stripe amount `10.5` | invalid — balance transactions are integer cents (Rule 1) |
+| PagoLat type `chargeback` | "unmapped pagolat type: chargeback" |
+| PagoLat line where gross − commission ≠ net | the line contradicts its own arithmetic |
 
 A quarantined record produces **no transaction** and therefore cannot quietly distort a
-reconciliation. (The clean demo dataset quarantines nothing — also asserted by a test.)
+reconciliation. (The demo's line-level records all parse clean — asserted by a test;
+its one planted quarantine is the whole-batch control-total failure from §4.)
+
+One more guard: the **circuit breaker** (Rule 6's big sibling). When more than half of
+a batch's records quarantine, the batch *halts* — even the parseable remainder is
+quarantined, each row saying explicitly "not processed: batch halted". A feed failing
+that hard has usually drifted its format, and the records that happened to still parse
+are not to be trusted either.
 
 ### 5.2 Versions and "current"
 
@@ -262,8 +298,9 @@ see §8.
 
 The database itself — not just the code — enforces the bookkeeping: one current version
 per identity, no duplicate raw versions, no double-translation of the same raw record by
-the same translator version, and (later, in matching) no transaction in two matches in
-one run. Even buggy code physically cannot create those situations.
+the same translator version, no transaction in two matches in one run, no logical break
+reported twice in one run, and one exception per break fingerprint. Even buggy code
+physically cannot create those situations.
 
 ## 6. Step 3 — Reconciliation: the matching game
 
@@ -276,10 +313,18 @@ This is the heart. A reconciliation run ("**recon run**"):
    moment it was created until the moment it was superseded. This is why running recon
    twice with no new data gives identical results — and why a past run can be
    *re-executed* even after later restatements (§8).
-2. **Matches** ledger vs. Stripe with **ruleset v1** (below).
+2. **Matches** the ledger against every external source with **ruleset v2** (below).
+   Tombstoned versions are excluded — the source says that money no longer exists.
 3. **Records everything, permanently**: the run (with its watermark, ruleset version,
-   and stats), each match (with *which version* of each transaction it matched), and
-   each break (with full details).
+   the full knob configuration, and stats), each match (with *which version* of each
+   transaction it matched, plus any tolerance or FX rate it applied), and each break
+   (with full details and a stable **fingerprint** — its identity across runs).
+4. **Feeds the worklist.** New breaks open exceptions; recurring ones stay one case
+   (not one per run); a break that vanished self-resolves its exception ("the books
+   were fixed"); a break recurring after a human resolved it **reopens** the case.
+   Every transition lands in an append-only history. And the run stamps every
+   change-event (supersession, tombstone) inside its watermark as covered — the audit
+   chain from "the world changed" to "we re-evaluated it".
 
 ### The five passes of ruleset v2
 
@@ -303,8 +348,8 @@ covering the whole group (kind: `grouped_reference`, the key, sums, rate, and
 tolerance all recorded). Disagree → the whole group is the break: exactly explained
 by fee-type lines the booking ignored → `unexpected_fee` naming them; cross-currency
 beyond the bps tolerance → `fx_drift` (the rate is the suspect); otherwise
-`amount_mismatch`. *Example: the 05-21 day-file's three lines net 2,913.00 MXN; at
-the recorded 0.0588 desk rate that is exactly the $171.28 booked as
+`amount_mismatch`. *Example: the 05-21 day-file's three lines net 2,900.00 MXN; at
+the recorded 0.0588 desk rate that is exactly the $170.52 booked as
 `LED-2026-PL21`.*
 
 **Pass 3 — Exact reference.**
@@ -371,11 +416,19 @@ involved — enough to explain itself years later without re-deriving anything.
 
 ### What a break is *not*
 
-A break is a **statement of disagreement between two record-keepers**, not an
-accusation and not yet a journal entry. Tieout never "fixes" a break by touching data —
+A break is a **statement of disagreement between record-keepers**, not an accusation
+and not yet a journal entry. Tieout never "fixes" a break by touching data —
 resolution happens in the real systems (book the missing fee, reverse the duplicate),
-and the *next* reconciliation run naturally comes back clean. (A proper exceptions
-workflow — assign, comment, resolve, with its own append-only history — is Stage 2/3.)
+and the *next* reconciliation run naturally comes back clean, which **self-resolves**
+the exception that was tracking it.
+
+That tracking is the **exceptions workflow**: a recurring break is one human-owned
+case, not a new finding every night. A person *acknowledges* it ("I'm on it") and
+*resolves* it with a reason ("booked the missing fee, JE-441") — and if the next
+run's facts disagree with that resolution, the case **reopens**. Every transition is
+recorded in an append-only event history; resolving an exception never touches a
+financial row. (The workflow runs headless today — service functions under every
+run, fully tested; Stage 3 adds the screens.)
 
 ## 7. What comes out
 
@@ -399,17 +452,17 @@ recon run 7e9b0611-…
 ```
 
 But the summary is just the receipt. The real output is the permanent record in
-Tieout's database: the run, its matches (each naming transaction **and version**), its
-breaks (with full details), all queryable forever. Stage 3 puts a dashboard and an
-exceptions worklist on top; the data model underneath is stable and designed to
-extend — later stages add to it, never rewrite it.
+Tieout's database: the run, its matches (each naming transaction **and version**),
+its breaks (with full details), and the exceptions worklist they feed — all queryable
+forever. Stage 3 puts a dashboard on top; the data model underneath is stable and
+designed to extend — later stages add to it, never rewrite it.
 
 ## 8. "Why was this flagged in March?" — reproducibility
 
 Because of Rules 2, 5, and 11, every historical run can be explained precisely:
 
 1. The run row says **as of when** it looked (`asOf`), and **which rulebook** it used
-   (`ruleset-v1`).
+   (`ruleset-v1` then, `ruleset-v2` today — the version string is the point).
 2. Its matches and breaks name the exact **versions** of the transactions they
    evaluated — so even if `LED-2026-0001` was later restated from $49.00 to $48.90, the
    March run still visibly says "I matched **v1, $49.00**."
@@ -418,8 +471,8 @@ Because of Rules 2, 5, and 11, every historical run can be explained precisely:
 
 So the answer to "why was this flagged in March?" is a chain of records, not a
 recollection: *this raw payload* → *translated by stripe-v1 into this transaction v1* →
-*evaluated by ruleset-v1 as of March 3, 02:00 UTC* → *no ledger counterpart existed
-among what we had observed* → `missing_in_ledger`.
+*evaluated by the then-current ruleset as of March 3, 02:00 UTC* → *no ledger
+counterpart existed among what we had observed* → `missing_in_ledger`.
 
 And the claim is stronger than explanation: a past run can be **re-executed**. Hand
 the engine an old watermark and it selects exactly the transaction versions that were
@@ -460,18 +513,21 @@ Following one record through its whole life:
 4. **Reconciled.** The run matches them (`exact_reference`), recording both ids *and
    versions* in the match, under run `7e9b0611-…`.
 5. **Restated (maybe).** If a corrected export later says $48.90: raw v2 lands,
-   transaction v2 becomes current, v1 is marked superseded (never deleted). The next
-   run now sees a $48.90 ledger claim vs. a $49.00 Stripe record with the same
-   reference → `amount_mismatch` break. The old run still cleanly describes the world
-   as it was.
+   transaction v2 becomes current, v1 is marked superseded (never deleted) — and the
+   same database transaction writes an outbox event announcing the change. The next
+   run (triggered by the dispatcher or the schedule) sees a $48.90 ledger claim vs. a
+   $49.00 Stripe record with the same reference → `amount_mismatch` break → an
+   exception opens on the worklist, and the run stamps the outbox event as covered.
+   The old run still cleanly describes the world as it was.
 6. **Forever.** Nothing in this chain is ever deleted. Storage is cheap; a broken audit
    trail is not.
 
 What *can* change, exhaustively: the `isCurrent`/`supersededAt` flags (§5.2), a batch's
-processing status (`landed` → `normalized` — operational bookkeeping, not financial
-data), source cursors (operational progress markers), outbox processing stamps
-(`processedAt`/`processedByRunId` — recording that a change event was re-evaluated,
-never altering the event itself), and exception workflow status (whose every
+processing status (`landed` → `normalized`, or `halted` when the circuit breaker
+trips — operational bookkeeping, not financial data), source cursors (operational
+progress markers), outbox processing stamps (`processedAt`/`processedByRunId` —
+recording that a change event was re-evaluated, never altering the event itself), and
+the exception workflow pointers (status, last-seen run, current break — whose every
 transition is also recorded in an append-only event history). That is the complete
 list.
 

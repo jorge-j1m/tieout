@@ -7,18 +7,17 @@ and the integration test.
 
 | Task              | Kind               | What it does                                                           |
 | ----------------- | ------------------ | ---------------------------------------------------------------------- |
-| `land-stripe`     | scheduled (hourly) | Lands a 48h overlapping window of balance transactions, fans out normalize |
+| `land-stripe`     | scheduled (hourly) | Polls the live test-mode API when `STRIPE_LIVE_LANDING=1` (48h overlapping window), explicit no-op otherwise |
 | `land-ledger`     | triggerable        | Lands the internal ledger export, fans out normalize                    |
+| `land-pagolat`    | triggerable        | Lands settlement day-files; whole-unit control-total failures quarantine and skip normalize |
 | `normalize-batch` | fan-out unit       | Normalizes one batch; idempotent per (raw, normalizerVersion)           |
-| `recon-run`       | triggerable        | Snapshot watermark → match → persist run/matches/breaks → Slack summary |
+| `dispatch-outbox` | triggerable        | Triggers a re-evaluating recon run when supersession/tombstone events are waiting |
+| `recon-run`       | triggerable        | Snapshot watermark → match → persist run/matches/breaks → sync exceptions → sweep outbox → Slack summary |
 | `recon-all`       | demo button        | Whole pipeline in one trigger — same code path as `pnpm recon`          |
 
-(The spec names these `land.stripe`, `land.ledger`, `normalize.batch`, `recon.run`;
-task ids use dashes.)
-
 Idempotency: every unit of work has an explicit key — ingestion batches dedupe on
-`idempotencyKey` in **our** Postgres (source + file/content hash; window-keyed for
-live API sources when they arrive), normalize fan-out uses
+`idempotencyKey` in **our** Postgres (unit + content hash for files; window-keyed
+for the live API), normalize fan-out uses
 `normalize:<source>:<normalizerVersion>:<batchId>` Trigger keys, and normalization
 itself skips already-processed raw records. Every task can run twice safely.
 

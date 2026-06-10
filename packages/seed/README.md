@@ -37,8 +37,8 @@ against their ledger bookings on a net basis, MXN→USD at the run's recorded ra
 
 PagoLat ships six day-files exercising settlement reality end to end:
 
-- **05-21** — clean: three lines group against `LED-2026-PL21`, nets summed in MXN,
-  converted at the recorded 0.0588 desk rate, exact.
+- **05-21** — clean: three lines netting 2,900.00 MXN group against the $170.52
+  booked as `LED-2026-PL21` — converted at the recorded 0.0588 desk rate, exact.
 - **05-22** — the platform fee surprise (break #8).
 - **05-23** — the wrong internal rate (break #9).
 - **05-24** — a file whose footer lies about its own totals: quarantined **whole** at
@@ -67,8 +67,8 @@ plants them deliberately instead of designing them out (bulk order amounts stay 
   settlements; the documented rule (earlier candidate wins) decides the pairing.
 - **Group D** — the window edge, both sides: a booking 47h58m after its charge
   (matches) and one 48h30m after (breaks #5/#6).
-- **Group E** — a true reference-less double-post: one copy pairs, the other is
-  break #7, deliberately pinned with ruleset-v1's labeling.
+- **Group E** — a true reference-less double-post: one copy pairs through the
+  fallback, and the duplicate heuristic (D29h) names the survivor — break #7.
 
 ## Regenerating
 

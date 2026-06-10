@@ -52,10 +52,10 @@ project at [cloud.trigger.dev](https://cloud.trigger.dev), set `TRIGGER_PROJECT_
 apps/jobs           Trigger.dev tasks + recon CLI (thin: orchestrate, retry, fan out)
 apps/web, apps/api  Stage 3 placeholders
 packages/contracts  Zod schemas + shared types — the boundary everything imports
-packages/core       Pure domain: money (bigint minor units), matching, hashing. Zero I/O.
+packages/core       Pure domain: money (bigint minor units, FX), matching, hashing. Zero I/O.
 packages/db         Drizzle schema + migrations + persistence services. Constraints are correctness features.
-packages/adapters   SourceAdapter implementations (ledger, stripe) + golden-file fixtures
-packages/seed       Deterministic Mercadia dataset with planted breaks
+packages/adapters   SourceAdapter implementations (ledger, stripe, pagolat) + golden-file fixtures
+packages/seed       Deterministic Mercadia dataset with planted breaks and settlement files
 docs/               how-it-works.md · onboarding.md · decisions.md · topology.md · specs/
 ```
 
