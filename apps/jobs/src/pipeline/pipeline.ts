@@ -7,9 +7,11 @@ import {
   landBatch,
   loadFxRatesAsOf,
   loadTransactionsAsOf,
+  markOutboxProcessed,
   normalizeBatch,
   persistReconRun,
   syncExceptionsForRun,
+  unprocessedOutbox,
   upsertFxRates,
   type Db,
   type LandResult,
@@ -157,6 +159,19 @@ export async function runRecon(db: Db, opts: ReconOptions): Promise<ReconSummary
   // Every run feeds the worklist: new breaks open exceptions, vanished ones
   // self-resolve, recurring resolved ones reopen (D18).
   await syncExceptionsForRun(db, runId, opts.now);
+
+  // This run re-evaluated everything inside its watermark — outbox events written
+  // up to then are now covered, and the stamp records which run covered them (D17).
+  // Events arriving later stay unprocessed for the next run or the dispatcher.
+  const covered = await unprocessedOutbox(db, { limit: 1000, createdBefore: asOf });
+  if (covered.length > 0) {
+    await markOutboxProcessed(
+      db,
+      covered.map((e) => e.id),
+      runId,
+      opts.now,
+    );
+  }
 
   return {
     runId,

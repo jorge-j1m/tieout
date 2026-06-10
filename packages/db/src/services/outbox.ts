@@ -1,4 +1,4 @@
-import { and, asc, inArray, isNull } from "drizzle-orm";
+import { and, asc, inArray, isNull, lte } from "drizzle-orm";
 import type { Db } from "../client.js";
 import { outbox } from "../schema.js";
 
@@ -11,13 +11,20 @@ import { outbox } from "../schema.js";
  * chain from "the world changed" to "we re-evaluated it".
  */
 
-export async function unprocessedOutbox(db: Db, limit = 100) {
+export async function unprocessedOutbox(
+  db: Db,
+  options: { limit?: number; createdBefore?: Date } = {},
+) {
   return db
     .select()
     .from(outbox)
-    .where(isNull(outbox.processedAt))
+    .where(
+      options.createdBefore === undefined
+        ? isNull(outbox.processedAt)
+        : and(isNull(outbox.processedAt), lte(outbox.createdAt, options.createdBefore)),
+    )
     .orderBy(asc(outbox.createdAt), asc(outbox.id))
-    .limit(limit);
+    .limit(options.limit ?? 100);
 }
 
 /**

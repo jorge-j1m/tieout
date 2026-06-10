@@ -10,6 +10,7 @@ import {
   matchMembers,
   matches,
   normalizeBatch,
+  outbox,
   quarantinedRecords,
   rawRecords,
   transactions,
@@ -149,6 +150,16 @@ describe("Stage 1 acceptance: full pipeline over the seed dataset", () => {
     expect(txnCount).toHaveLength(expected.transactions);
     expect(txnCount.filter((t) => t.isCurrent)).toHaveLength(expected.currentTransactions);
     expect(txnCount.filter((t) => t.isTombstone)).toHaveLength(expected.tombstonedTransactions);
+  });
+
+  it("the tombstone's outbox event was swept by the run that re-evaluated it (D17)", async () => {
+    const events = await client.db.select().from(outbox);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      topic: "transaction.tombstoned",
+      processedByRunId: first.summary.runId,
+    });
+    expect(events[0]!.processedAt).not.toBeNull();
   });
 
   it("the restated day-file tombstoned exactly the line PagoLat removed", async () => {

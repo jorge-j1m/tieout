@@ -437,6 +437,9 @@ export async function normalizeBatch(
               : { id: insertedTxns[plan.old.builtIdx]!.id, version: txnRows[plan.old.builtIdx]!.version };
           return {
             topic: plan.topic,
+            // Same logical instant as the version it announces — the run that
+            // covers this event compares against the data clock, not the wall.
+            createdAt: now,
             payload: {
               source: row.source,
               sourceAccount: row.sourceAccount,
