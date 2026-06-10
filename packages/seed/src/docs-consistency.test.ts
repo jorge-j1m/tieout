@@ -56,6 +56,13 @@ describe("docs quote the manifest's numbers", () => {
     ]);
   });
 
+  it("root README quotes the right match/break counts", () => {
+    const text = doc("README.md");
+    expect(
+      captured(text, /\*\*(\d+) matches and exactly (\d+) breaks\*\*/, "README.md quickstart"),
+    ).toEqual([expected.matches.total, expected.totalBreaks]);
+  });
+
   it("seed README's story and break table match the manifest", () => {
     const text = doc("packages/seed/README.md");
     expect(captured(text, /(\d+) records match on exact reference/, "seed README")).toEqual([

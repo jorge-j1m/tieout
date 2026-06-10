@@ -155,11 +155,12 @@ identical output.
   nothing needs the network; the live API client will later replace only the "fetch"
   part, nothing downstream.
 
-**When.** Stripe landing is scheduled hourly; ledger landing runs on demand (and both
-run as part of any full pipeline run, e.g. the `pnpm recon` command or the `recon-all`
-job). Each scheduled poll re-covers a **48-hour lookback window** on purpose: data
-arrives late and out of order (Rule 5), and re-seeing the same records is free thanks to
-Rule 7.
+**When.** In Stage 1 both feeds land on demand (as part of any full pipeline run, e.g.
+the `pnpm recon` command or the `recon-all` job) — an hourly poll against a committed
+fixture would be a no-op, so the schedule arrives with the live Stripe client in
+Stage 2. The landing task is already windowed for that future: each poll re-covers a
+**48-hour lookback window** on purpose, because data arrives late and out of order
+(Rule 5), and re-seeing the same records is free thanks to Rule 7.
 
 **What "landing" stores.** Each unit of work (one file, one API window) becomes an
 **ingestion batch**, and every record in it becomes a **raw record**:
@@ -219,8 +220,10 @@ Two details worth pausing on:
   should look at this," not a silent default.
 - **The translator is versioned.** Every transaction records `normalizerVersion`
   (currently `ledger-v1` / `stripe-v1`). Found a translation bug? Bump the version and
-  re-run: every raw record gets re-translated into new transaction versions, traceably,
-  per Rule 3.
+  re-run: every raw record gets re-translated, and any whose translation actually
+  *differs* gains a new, traceable version (Rule 3). Re-translations whose output is
+  identical to what's already recorded write nothing — the trail records *change*, not
+  activity, so a genuine restatement never drowns in translator churn.
 
 ### 5.1 What quarantine looks like
 
@@ -265,10 +268,13 @@ one run. Even buggy code physically cannot create those situations.
 
 This is the heart. A reconciliation run ("**recon run**"):
 
-1. **Fixes its snapshot.** The run computes its `asOf` watermark — "everything we had
-   observed up to this moment" — from the data itself (the latest `observedAt`), not
-   from the wall clock. It then takes all *current* transaction versions observed by
-   then. This is why running recon twice with no new data gives identical results.
+1. **Fixes its snapshot.** The run computes its `asOf` watermark — "everything the
+   system of record contained up to this moment" — from the data itself (the latest
+   transaction-version creation), not from the wall clock. It then takes exactly the
+   transaction versions **in effect** at that watermark: each version counts from the
+   moment it was created until the moment it was superseded. This is why running recon
+   twice with no new data gives identical results — and why a past run can be
+   *re-executed* even after later restatements (§8).
 2. **Matches** ledger vs. Stripe with **ruleset v1** (below).
 3. **Records everything, permanently**: the run (with its watermark, ruleset version,
    and stats), each match (with *which version* of each transaction it matched), and
@@ -281,10 +287,12 @@ Stripe payout vs. many ledger entries — is Stage 2.)
 
 **Pass 1 — Duplicate sweep (within each side).**
 If one side has two records claiming the same reference, the earliest is kept in the
-game and every extra is consumed as a `duplicate_candidate` break. *Example: Mercadia
-posted order #1027 twice — `LED-2026-0028` and `LED-2026-0028-DUP`, both $85.99, both
-referencing `ch_mercadia_0028`. The original stays matchable; the re-post becomes a
-break for a human to reverse in the books.*
+game and every extra is consumed as a `duplicate_candidate` break. (Ties — same
+reference, same timestamp — fall back to the source's own id, so the kept record is
+always the same one.) *Example: Mercadia posted order #1027 twice — `LED-2026-0028`
+and `LED-2026-0028-DUP`, both $85.99, both referencing `ch_mercadia_0028`. The
+original stays matchable; the re-post becomes a break for a human to reverse in the
+books.*
 
 **Pass 2 — Exact reference.**
 A ledger record and a Stripe record citing the same reference are each other's
@@ -299,9 +307,13 @@ Records still unmatched (e.g. a manual journal entry booked without a PSP refere
 are paired by exact amount, same currency, and event times within **±2 days**, choosing
 the nearest in time when several qualify (kind: `amount_date_window`). *Example: order
 #1007's $58.59 was booked manually as `LED-2026-0008` with no reference; it still finds
-`txn_ch_0008` (+5859¢, same day).* The demo dataset makes every amount unique so this
-pass can never pair the wrong records; in the real world this pass is deliberately
-conservative — same cent, same currency, close in time.
+`txn_ch_0008` (+5859¢, same day).* Ambiguity is resolved by an explicit, reproducible
+rule, not by luck: each ledger record, oldest first, claims its nearest surviving
+counterpart; an exact-distance tie goes to the earlier candidate, and identical
+timestamps fall back to the source's own id. Greedy and auditable rather than globally
+optimised — simple to explain, deterministic to replay. The demo dataset plants a
+same-amount, same-day cluster precisely to exercise these rules; in the real world this
+pass stays deliberately conservative — same cent, same currency, close in time.
 
 **Pass 4 — Leftovers become breaks.**
 Anything still standing alone *is* the finding: a leftover ledger record →
@@ -314,8 +326,8 @@ thousands of generated scenarios).
 
 | Break type | Plain English | Demo example | Typical resolution |
 |---|---|---|---|
-| `missing_in_ledger` | "Money moved at the processor that your books don't show." | Stripe charged an **$8.50** Radar fee (`txn_fee_radar_0001`) nobody booked; a **$66.81** refund (`txn_re_0014`) was issued in Stripe but never booked | Book the fee / the refund |
-| `missing_in_stripe` | "Your books claim money moved, but the processor has no record." | `LED-2026-NS01`: a **$111.11** payment booked, but the charge never settled | Reverse or re-collect; investigate why it was booked |
+| `missing_in_ledger` | "Money moved at the processor that your books don't show." | Stripe charged an **$8.50** Radar fee (`txn_fee_radar_0001`) nobody booked; a **$66.81** refund (`txn_re_0014`) was issued in Stripe but never booked; `txn_cl_d2`'s booking missed the ±48h window | Book the fee / the refund |
+| `missing_in_stripe` | "Your books claim money moved, but the processor has no record." | `LED-2026-NS01`: a **$111.11** payment booked, but the charge never settled; `LED-2026-CLD2` (the window-edge booking) and `LED-2026-CLE2` (a reference-less double-post — see the seed README) | Reverse or re-collect; investigate why it was booked |
 | `amount_mismatch` | "Both sides describe the same event but disagree on the amount." | (none planted in the demo) ledger says $49.00, Stripe says $48.90 for the same charge | Find the fee/rounding/entry error; correct the books |
 | `duplicate_candidate` | "The same event appears twice on one side." | `LED-2026-0028-DUP`, the double-posted $85.99 | Reverse the duplicate posting |
 
@@ -339,19 +351,20 @@ The demo's actual output:
 recon run 7e9b0611-…
   as of:    2026-06-05T00:00:00.000Z
   ruleset:  ruleset-v1
-  ledger: 1 batch(es), 0 raw inserted, 45 unchanged, 0 normalized, 0 quarantined
-  stripe: 1 batch(es), 0 raw inserted, 45 unchanged, 0 normalized, 0 quarantined
-  matches:  43 (86 transactions)
-  breaks:   4
-    - missing_in_ledger: 2
-    - missing_in_stripe: 1
+  ledger: 1 batch(es), 0 raw inserted, 58 unchanged, 0 normalized, 0 quarantined
+  stripe: 1 batch(es), 0 raw inserted, 57 unchanged, 0 normalized, 0 quarantined
+  matches:  54 (108 transactions)
+  breaks:   7
+    - missing_in_ledger: 3
+    - missing_in_stripe: 3
     - duplicate_candidate: 1
 ```
 
 But the summary is just the receipt. The real output is the permanent record in
 Tieout's database: the run, its matches (each naming transaction **and version**), its
 breaks (with full details), all queryable forever. Stage 3 puts a dashboard and an
-exceptions worklist on top; the data model underneath is already final.
+exceptions worklist on top; the data model underneath is stable and designed to
+extend — later stages add to it, never rewrite it.
 
 ## 8. "Why was this flagged in March?" — reproducibility
 
@@ -370,11 +383,19 @@ recollection: *this raw payload* → *translated by stripe-v1 into this transact
 *evaluated by ruleset-v1 as of March 3, 02:00 UTC* → *no ledger counterpart existed
 among what we had observed* → `missing_in_ledger`.
 
+And the claim is stronger than explanation: a past run can be **re-executed**. Hand
+the engine an old watermark and it selects exactly the transaction versions that were
+in effect then — versions created later are invisible, versions superseded later are
+restored — so the March run re-derives its March conclusions even though the world has
+since been restated. This is not aspirational: the test suite lands the data,
+reconciles, restates a record, re-executes the old watermark, and asserts the replay's
+matches and breaks are identical to the original's.
+
 ## 9. When everything runs
 
 | Job | When | What it does |
 |---|---|---|
-| `land-stripe` | hourly (scheduled) | lands a 48h overlapping window of balance transactions, then fans out normalization per batch |
+| `land-stripe` | on demand (hourly schedule returns with the live client, Stage 2) | lands a 48h overlapping window of balance transactions, then fans out normalization per batch |
 | `land-ledger` | on demand | same, for the ledger export |
 | `normalize-batch` | fan-out after landing | translates one batch; skips anything already translated |
 | `recon-run` | on demand (nightly, eventually) | one reconciliation run + summary |
@@ -480,7 +501,7 @@ trail stays trustworthy.
 | **Superseded** | A version replaced by a newer one (kept forever, flagged with a timestamp) |
 | **Identity** | The trio (source, account, source's own ID) that makes a record unique |
 | **occurredAt / observedAt** | When the event happened vs. when Tieout learned of it |
-| **Watermark / asOf** | "Everything observed up to this moment" — a run's fixed snapshot point |
+| **Watermark / asOf** | "Everything the system of record contained up to this moment" — a run's fixed snapshot point, re-executable forever |
 | **Recon run** | One execution of the matching game over a snapshot, recorded permanently |
 | **Ruleset** | The versioned rulebook a run used (currently `ruleset-v1`) |
 | **Match** | A recorded "these records are counterparts," naming exact transaction versions |
@@ -491,5 +512,5 @@ trail stays trustworthy.
 ---
 
 *To see all of this live: follow the README quickstart, run `pnpm recon` twice, and
-compare the two runs. The four breaks it reports are exactly the four planted in
+compare the two runs. The breaks it reports are exactly the ones planted in
 [`packages/seed/README.md`](../packages/seed/README.md).*

@@ -9,16 +9,24 @@ describe("Mercadia dataset", () => {
     expect(generateMercadiaDataset()).toEqual(generateMercadiaDataset());
   });
 
-  it("has unique ids and unique charge amounts (fallback matching stays unambiguous)", () => {
+  it("has unique ids; bulk charge amounts unique, cluster amounts colliding on purpose", () => {
     const { ledgerEntries, stripeBalanceTransactions } = generateMercadiaDataset();
     const entryIds = ledgerEntries.map((e) => e.entryId);
     expect(new Set(entryIds).size).toBe(entryIds.length);
     const txnIds = stripeBalanceTransactions.map((t) => t.id);
     expect(new Set(txnIds).size).toBe(txnIds.length);
-    const chargeAmounts = stripeBalanceTransactions
-      .filter((t) => t.type === "charge")
-      .map((t) => t.amount);
-    expect(new Set(chargeAmounts).size).toBe(chargeAmounts.length);
+
+    const charges = stripeBalanceTransactions.filter((t) => t.type === "charge");
+    const bulk = charges.filter((t) => !t.id.startsWith("txn_cl_"));
+    expect(new Set(bulk.map((t) => t.amount)).size).toBe(bulk.length);
+    // The adversarial cluster must keep colliding — that's its whole point.
+    const cluster = charges.filter((t) => t.id.startsWith("txn_cl_"));
+    const amountCounts = new Map<number, number>();
+    for (const c of cluster) amountCounts.set(c.amount, (amountCounts.get(c.amount) ?? 0) + 1);
+    expect(Math.max(...amountCounts.values())).toBeGreaterThanOrEqual(2);
+    // And cluster amounts never collide with the bulk set.
+    const bulkAmounts = new Set(bulk.map((t) => t.amount));
+    expect(cluster.some((c) => bulkAmounts.has(c.amount))).toBe(false);
   });
 
   it("ledger amounts parse losslessly to bigint minor units", () => {
@@ -27,12 +35,15 @@ describe("Mercadia dataset", () => {
     }
   });
 
-  it("plants exactly the four documented breaks", () => {
+  it("plants exactly the documented breaks", () => {
     const { plantedBreaks } = generateMercadiaDataset().manifest;
     expect(plantedBreaks.map((b) => b.breakType).sort()).toEqual([
       "duplicate_candidate",
       "missing_in_ledger",
       "missing_in_ledger",
+      "missing_in_ledger",
+      "missing_in_stripe",
+      "missing_in_stripe",
       "missing_in_stripe",
     ]);
     const planted = new Set(plantedBreaks.map((b) => b.sourceId));

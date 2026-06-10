@@ -20,11 +20,11 @@ cp .env.example .env            # set the local passwords
 docker compose up -d            # postgres + minio (127.0.0.1 only)
 pnpm db:migrate
 pnpm seed                       # materialize the Mercadia dataset
-pnpm recon                      # full pipeline; expect 43 matches, 4 breaks
+pnpm recon                      # full pipeline; expect 54 matches, 7 breaks
 turbo run typecheck lint test   # the definition of done — must be green
 ```
 
-If `pnpm recon` reports anything other than 43 matches / 4 breaks on a fresh clone,
+If `pnpm recon` reports anything other than 54 matches / 7 breaks on a fresh clone,
 stop and fix that before changing anything — the demo dataset is the living acceptance
 test.
 
@@ -32,18 +32,25 @@ test.
 
 ```bash
 cd packages/core && npx vitest          # watch mode while editing matching/money
-cd packages/db && npx vitest           # db tests (needs DATABASE_URL; they SKIP without it)
+cd packages/db && npx vitest           # db tests (need Postgres up — see below)
 turbo run typecheck lint test          # full gate before calling anything done
 ```
 
 Two sharp edges of the test setup:
 
-- **db and jobs tests truncate the database.** They own whatever is in your local
-  Postgres; everything is regenerable (`pnpm seed && pnpm recon`). They run
-  sequentially (`@tieout/jobs#test` waits for `@tieout/db#test` in `turbo.json`)
-  because they share that database — don't "fix" the slowness by parallelizing them.
-- **Tests that need Postgres skip silently when `DATABASE_URL` is unset.** Green
-  without docker running is not the same green as CI's. CI always has the database.
+- **db and jobs tests never touch your working data, and need no infrastructure.**
+  With `DATABASE_URL` configured (your normal setup) they run against an isolated
+  `<name>_test` database (auto-created; override with `TEST_DATABASE_URL`) on the same
+  engine as production. With no `DATABASE_URL` at all — fresh clone, no docker — they
+  fall back to an ephemeral in-memory PGlite (real Postgres compiled to WASM), so the
+  full gate runs on a bare clone. They run sequentially (`@tieout/jobs#test` waits for
+  `@tieout/db#test` in `turbo.json`) because the postgres mode shares one test
+  database — don't "fix" the slowness by parallelizing them.
+- **There is no way to skip the db suites** — they always run, on one engine or the
+  other, so local green means what CI green means. CI runs both paths: real Postgres 17
+  for engine fidelity, and a zero-infra PGlite job protecting the fresh-clone
+  experience. One PGlite guardrail (D28): never query bigint columns through Drizzle's
+  relational API (`db.query…with`) — use `db.select()`, as all existing code does.
 
 ## 2. The codemap: concept → code
 
@@ -70,7 +77,7 @@ parameter). That purity is what makes its property tests trustworthy; don't erod
 | The spine schema and its constraints (§5.3) | `packages/db/src/schema.ts`; migrations in `packages/db/drizzle/` | `db/src/test/schema.test.ts` proves each constraint rejects |
 | Landing: batches, raw versioning, idempotency (§4) | `packages/db/src/services/ingest.ts` (`landBatch`) | `db/src/test/services.test.ts` (re-land, crash-retry, restatement) |
 | Normalization persistence: versions, supersession, quarantine rows (§5) | `packages/db/src/services/normalize.ts` (`normalizeBatch`) | same file |
-| Recon persistence: watermark, runs, matches, breaks (§6, §8) | `packages/db/src/services/recon.ts` (`currentWatermark`, `loadCurrentTransactions`, `persistReconRun`) | integration test |
+| Recon persistence: watermark, as-of selection, runs, matches, breaks (§6, §8) | `packages/db/src/services/recon.ts` (`currentWatermark`, `loadTransactionsAsOf`, `persistReconRun`) | integration test, incl. restate-and-re-execute |
 | Cursors (§4) | `packages/db/src/services/cursors.ts` | services test ("cursors only move forward") |
 | Ledger dialect: schema, type/status maps, quarantine (§5) | `packages/adapters/src/ledger/adapter.ts` | golden files in `packages/adapters/fixtures/ledger/` |
 | Stripe dialect (§5) | `packages/adapters/src/stripe/adapter.ts` | golden files in `fixtures/stripe/` |
@@ -117,10 +124,12 @@ will otherwise bite you.
    that's them working; don't weaken them, satisfy them.
 3. Keep determinism: no clock, no randomness, no iteration over unordered structures
    that reaches the output. The shuffle-property test enforces this.
-4. If behavior changes on the demo data, update the expected counts in
-   `apps/jobs/src/test/integration.test.ts` (43 matches / 4 breaks),
-   `packages/seed/README.md`, and the numbers quoted in `how-it-works.md` §6–7 — same
-   change, same commit (the no-doc-rot rule).
+4. If behavior changes on the demo data, the expected counts live in one place:
+   the `expected` block the generator computes into `packages/seed/data/manifest.json`
+   (the integration test asserts against it, never against literals). Update the
+   generator, re-run `pnpm seed`, then fix the numbers quoted in `how-it-works.md` §7,
+   `packages/seed/README.md`, and §1 of this file — the seed package's doc-consistency
+   test fails until docs and manifest agree.
 5. New tolerance/window knobs go on `MatchingConfig` (core) with the default in
    `apps/jobs/src/pipeline/pipeline.ts`, and get recorded in run `stats` so runs stay
    self-describing.
@@ -170,13 +179,16 @@ will otherwise bite you.
 ### 3.6 Change the seed dataset
 
 1. Edit `packages/seed/src/generate.ts`. Stay deterministic: derive everything from
-   the order index — no `Date.now()`, no randomness. Keep amounts unique
-   (`4900 + i·137` exists so the fallback matcher can never mis-pair).
+   the order index — no `Date.now()`, no randomness. Bulk amounts stay unique
+   (`4900 + i·137`) so the easy volume is unambiguous; the adversarial cluster
+   collides amounts *on purpose* — extend it (with new amounts outside the bulk
+   residue class) rather than diluting it.
 2. `pnpm seed` to rewrite `packages/seed/data/` — commit generator **and** data
    together; the freshness test fails the build if they drift.
-3. If you changed the planted breaks: update `manifest.json` output in the generator,
-   `packages/seed/README.md`'s table, the integration test counts, and
-   `how-it-works.md`'s examples.
+3. If you changed the planted breaks or the totals: the generator computes all of
+   `manifest.json` (planted breaks + the `expected` totals) — update
+   `packages/seed/README.md`'s table and the numbers quoted in `how-it-works.md` §7
+   and §1 of this file; the doc-consistency test enumerates every spot that must agree.
 
 ### 3.7 Add or change a Trigger.dev task
 
@@ -203,9 +215,10 @@ You almost never touch stored rows. Decision tree:
 
 ## 4. How you know you're done
 
-1. `turbo run typecheck lint test` green, **with docker up** (so the db suites actually
-   ran rather than skipped).
-2. `pnpm recon` twice → identical summaries, and the expected breaks (4, unless you
+1. `turbo run typecheck lint test` green. With docker up, the db suites run on real
+   Postgres 17 (same engine as CI); without it they run on in-memory PGlite — either
+   way they run, never skip.
+2. `pnpm recon` twice → identical summaries, and the expected breaks (7, unless you
    changed the dataset on purpose).
 3. Behavior changes carry a test at the right layer: property test in `core`, golden
    file in `adapters`, rejection test for new constraints in `db`, count/shape update
@@ -216,8 +229,9 @@ You almost never touch stored rows. Decision tree:
    behavior → the matching section of `how-it-works.md`; changed commands/services →
    `topology.md` / `README.md`. If docs and code disagree, code wins and the doc is the
    bug — fix it in the same commit.
-6. CI (`.github/workflows/ci.yml`) runs the same gate against Postgres 17 + gitleaks;
-   if it's green locally with docker up, it's green there.
+6. CI (`.github/workflows/ci.yml`) runs the same gate against Postgres 17, a second
+   zero-infra test job on PGlite, and gitleaks; if it's green locally with docker up,
+   it's green there.
 
 ## 5. The guardrails will catch you — let them
 
@@ -234,6 +248,7 @@ rejected, so iterate boldly and read failures as information.
 | let a transaction vanish from the match/break partition | the partition property test |
 | change adapter output without noticing the blast radius | golden-file diffs |
 | edit the seed generator but not the committed data (or vice versa) | the freshness test |
+| quote demo numbers in a doc that drift from the dataset | the seed doc-consistency test |
 | break the quickstart | the integration test is the quickstart |
 
 If a guardrail blocks something you believe is correct, that's a design conversation —

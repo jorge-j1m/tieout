@@ -27,22 +27,43 @@
       "source": "ledger",
       "sourceId": "LED-2026-0028-DUP",
       "reason": "Same charge booked twice in the ledger"
+    },
+    {
+      "id": "planted-window-edge-stripe",
+      "breakType": "missing_in_ledger",
+      "source": "stripe",
+      "sourceId": "txn_cl_d2",
+      "reason": "Settled in Stripe; its manual booking landed 48h30m later — just outside the ±48h fallback window"
+    },
+    {
+      "id": "planted-window-edge-ledger",
+      "breakType": "missing_in_stripe",
+      "source": "ledger",
+      "sourceId": "LED-2026-CLD2",
+      "reason": "Booked 48h30m after the charge — just outside the ±48h fallback window (the other half of planted-window-edge-stripe)"
+    },
+    {
+      "id": "planted-referenceless-double-post",
+      "breakType": "missing_in_stripe",
+      "source": "ledger",
+      "sourceId": "LED-2026-CLE2",
+      "reason": "True double-post without a reference: ruleset-v1 pairs one copy and reports this one missing_in_stripe — relabeling it duplicate_candidate is a Stage 2 item"
     }
   ],
   "expected": {
-    "ledgerRecords": 45,
-    "stripeRecords": 45,
-    "transactions": 90,
+    "ledgerRecords": 58,
+    "stripeRecords": 57,
+    "transactions": 115,
     "matches": {
-      "exact_reference": 40,
-      "amount_date_window": 3,
-      "total": 43
+      "exact_reference": 44,
+      "amount_date_window": 10,
+      "total": 54
     },
     "breaksByType": {
-      "missing_in_ledger": 2,
-      "missing_in_stripe": 1,
+      "missing_in_ledger": 3,
+      "missing_in_stripe": 3,
       "duplicate_candidate": 1
     },
-    "totalBreaks": 4
+    "totalBreaks": 7
   }
 }
