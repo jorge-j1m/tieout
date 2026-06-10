@@ -1,28 +1,32 @@
 import "../env.js";
 import { logger, schedules } from "@trigger.dev/sdk";
 import { createDbClient, requireDatabaseUrl } from "@tieout/db";
-import { STRIPE_SOURCE } from "@tieout/adapters";
-import { getSeedAdapter } from "../pipeline/adapters.js";
+import { createStripeAdapterFromEnv } from "../pipeline/adapters.js";
 import { landSource } from "../pipeline/pipeline.js";
 import { normalizeBatchTask } from "./normalize-batch.js";
 
 const LOOKBACK_MS = 48 * 3_600_000;
 
 /**
- * Windowed Stripe landing (D12): every run re-covers a 48h lookback window
- * behind the schedule timestamp — late, out-of-order data is re-observed and
- * content-hash dedup makes the overlap free. Assume every run happens twice.
+ * Scheduled, windowed Stripe landing (D12): every run re-covers a 48h lookback
+ * window behind the schedule timestamp — late, out-of-order data is re-observed
+ * and content-hash dedup makes the overlap free. Assume every run happens twice.
  *
- * No declarative cron yet: against the committed Stage 1 fixture an hourly run
- * is a pure no-op (D25 — the adapter lands whole content-hash-keyed units), so
- * the schedule returns with the live Stripe client in Stage 2.
+ * The hourly cron is back now that the live client exists (the Stage 2 promise):
+ * with STRIPE_LIVE_LANDING=1 it polls the real test-mode API; without it the run
+ * is an explicit no-op — fixtures land on demand, not on a clock.
  */
 export const landStripeTask = schedules.task({
   id: "land-stripe",
+  cron: "0 * * * *",
   run: async (payload) => {
+    const { adapter, live } = createStripeAdapterFromEnv();
+    if (!live) {
+      logger.info("live stripe landing not configured (STRIPE_LIVE_LANDING) — skipping scheduled poll");
+      return [];
+    }
     const to = payload.timestamp;
     const from = new Date(to.getTime() - LOOKBACK_MS);
-    const adapter = getSeedAdapter(STRIPE_SOURCE);
     const { db, sql } = createDbClient(requireDatabaseUrl());
     try {
       const landed = await landSource(db, adapter, { from, to }, new Date());

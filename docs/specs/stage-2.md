@@ -16,8 +16,11 @@ trail) holds for the richer ruleset.
 1. **PagoLat settlement-file adapter** — the invented LatAm PSP, as a *file* source:
    day-files of MXN settlement lines with locale decimals (`1.234,56`), header/footer
    control totals (opening + sum(lines) = closing), renamable headers, **no line ids**
-   (→ `syntheticSourceId`, occurrence index preserves legitimate duplicate lines).
-   Fixture-driven like Stripe; raw files archived to MinIO (D9 finally exercised).
+   (→ `syntheticSourceId` off the stable unit key, occurrence index preserves
+   legitimate duplicate lines). Fixture-driven like Stripe. Archival is an injected
+   `archive` callback recorded as `archiveUrl` on the batch — the MinIO client itself
+   is deferred (see Later): archiving copies of git-committed demo files adds a
+   moving part with no audit value today; the interface is proven by tests.
 2. **Batch integrity (D13)** — control totals verified at landing; a failing file
    quarantines as a *whole batch* (batch-level quarantine, not row-level); a
    failure-rate circuit breaker halts a batch mid-normalization (D14).
@@ -79,29 +82,32 @@ as hints only — poll is truth); multi-tenancy. Note ideas under "Later".
 
 ## Acceptance
 
-- [ ] A PagoLat settlement groups its lines into one match against the ledger's
+- [x] A PagoLat settlement groups its lines into one match against the ledger's
       settlement entry on a net basis; group sums proven preserved by property test.
       A Stripe payout reconciles 1:1 against its ledger deposit (opposite signs).
-- [ ] A PagoLat day-file lands, normalizes (locale decimals parsed straight to bigint),
+- [x] A PagoLat day-file lands, normalizes (locale decimals parsed straight to bigint),
       and its lines match ledger entries N:1; a file failing its control totals
       quarantines as a batch.
-- [ ] A restated file with a removed line produces a tombstone version; the next run
-      reflects the disappearance; re-executing the pre-restatement watermark is
-      byte-identical (extends the D27 integration test).
-- [ ] An unmatched transaction inside its source's lag window reports as pending, not
+- [x] A restated file with a removed line produces a tombstone version; the next run
+      reflects the disappearance; re-executing the pre-restatement watermark still
+      sees the live version (proven at the service layer, where distinct watermarks
+      exist; the seed's restatement shares one pipeline instant).
+- [x] An unmatched transaction inside its source's lag window reports as pending, not
       a break; a run after the window flips it to a break — both from the same data,
-      different `asOf`.
-- [ ] A cross-currency match records its rate (value/source/timestamp); pushing the
+      different `asOf`. (Deliberately not in the demo manifest: the demo watermark is
+      the wall clock; the integration suite pins `asOf` instead.)
+- [x] A cross-currency match records its rate (value/source/date); pushing the
       pair outside tolerance yields `fx_drift` instead.
-- [ ] Superseding a matched transaction emits exactly one outbox event (same
-      transaction as the supersession) and re-evaluation reopens the conclusion as a
-      new run; the original run still re-executes identically.
-- [ ] Break → exception → resolve → restatement → reopened, entirely through service
+- [x] Superseding a matched transaction emits exactly one outbox event (same
+      transaction as the supersession) and re-evaluation is a new run that stamps the
+      events it covered; the original run still re-executes identically.
+- [x] Break → exception → resolve → restatement → reopened, entirely through service
       functions, with an append-only event trail.
-- [ ] `LED-2026-CLE2` now surfaces as `duplicate_candidate` (test flipped on purpose,
+- [x] `LED-2026-CLE2` now surfaces as `duplicate_candidate` (test flipped on purpose,
       manifest + docs updated in the same change).
-- [ ] All Stage 1 invariants still hold under `ruleset-v2`: partition, determinism
-      (shuffle), idempotent tasks, quickstart ≤5 minutes, zero-infra tests green.
+- [x] All Stage 1 invariants still hold under `ruleset-v2`: partition (now
+      match-xor-break-xor-pending), determinism (shuffle), idempotent tasks,
+      quickstart ≤5 minutes, zero-infra tests green.
 
 ## Suggested build order
 
@@ -123,6 +129,9 @@ as hints only — poll is truth); multi-tenancy. Note ideas under "Later".
 
 - Webhooks as freshness hints (poll remains truth, D21).
 - Per-source data-quality scorecards (quarantine rates, restatement frequency).
+- The MinIO archive client in jobs (`ctx.archive` implementation): arrives with the
+  first source whose files exist OUTSIDE the repo (live SFTP drops); the demo's
+  day-files are git-versioned — the repo is already the archive.
 - Intra-source group integrity ("does this payout equal its charges minus fees,
   inside Stripe?") — a D13-style completeness check, not a cross-source match; needs
   its own surface so it doesn't masquerade as reconciliation.

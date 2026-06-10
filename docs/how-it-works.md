@@ -30,12 +30,13 @@ guesses.**
 
 ## 2. The cast of characters
 
-In Stage 1 there are two record-keepers ("**sources**"), watched by one engine:
+Three record-keepers ("**sources**"), watched by one engine:
 
 | Who | What they are | What their records look like |
 |---|---|---|
 | **The ledger** | Mercadia's own books — its internal system of record | "Entry LED-2026-0001: customer payment, **$49.00**, booked May 1, reference `ch_mercadia_0001`" |
 | **Stripe** | The payment processor that actually handles the cards | "Balance transaction `txn_ch_0001`: charge, **+4900** cents, May 1, from charge `ch_mercadia_0001`" |
+| **PagoLat** | The LatAm settlement PSP — daily files, MXN, locale decimals, no line ids | "`LINE;2026-05-21 09:15:00;sale;plord_801;1.250,00;36,25;1.213,75`" inside a day-file with header/footer control totals |
 
 Neither side is "the truth." They are two **witnesses** to the same events, and each one
 can be wrong, late, or incomplete in its own way. Tieout's job is to cross-examine them.
@@ -280,10 +281,7 @@ This is the heart. A reconciliation run ("**recon run**"):
    and stats), each match (with *which version* of each transaction it matched), and
    each break (with full details).
 
-### The four passes of ruleset v1
-
-All passes are 1:1 — one ledger record to one Stripe record. (Grouped matching — one
-Stripe payout vs. many ledger entries — is Stage 2.)
+### The five passes of ruleset v2
 
 **Pass 1 — Duplicate sweep (within each side).**
 If one side has two records claiming the same reference, the earliest is kept in the
@@ -294,15 +292,33 @@ and `LED-2026-0028-DUP`, both $85.99, both referencing `ch_mercadia_0028`. The
 original stays matchable; the re-post becomes a break for a human to reverse in the
 books.*
 
-**Pass 2 — Exact reference.**
-A ledger record and a Stripe record citing the same reference are each other's
-counterpart. If their amounts and currency agree → **match** (kind:
-`exact_reference`). If they cite the same reference but *disagree on the amount* →
-that's not a missing record, it's a contradiction: an `amount_mismatch` break consuming
-both. *Example match: `LED-2026-0001` ($49.00, ref `ch_mercadia_0001`) ↔ `txn_ch_0001`
-(+4900¢, source `ch_mercadia_0001`).*
+**Pass 2 — Grouped settlement (N:1).**
+Settlement sources deliver money in batches: one PagoLat day-file has many lines, and
+the ledger books **one** entry for the whole settlement. Every line carries its
+settlement unit (`groupRef`); the ledger entry's reference names the same key; the
+group's **nets** (what actually arrives, after the source's own commissions) are
+summed — converted with the run's recorded FX rate when the currencies differ — and
+compared against the booking. Agree (within the recorded tolerance) → one match
+covering the whole group (kind: `grouped_reference`, the key, sums, rate, and
+tolerance all recorded). Disagree → the whole group is the break: exactly explained
+by fee-type lines the booking ignored → `unexpected_fee` naming them; cross-currency
+beyond the bps tolerance → `fx_drift` (the rate is the suspect); otherwise
+`amount_mismatch`. *Example: the 05-21 day-file's three lines net 2,913.00 MXN; at
+the recorded 0.0588 desk rate that is exactly the $171.28 booked as
+`LED-2026-PL21`.*
 
-**Pass 3 — Amount + date window.**
+**Pass 3 — Exact reference.**
+A ledger record and an external record citing the same reference are each other's
+counterpart. If their amounts and currency agree → **match** (kind:
+`exact_reference`). Payout/transfer legs are the same movement seen from both ends,
+so they must sum to **zero** instead (a Stripe payout of −$2,500 matches the $2,500
+deposit booked against it). Same reference but *disagreeing amounts* → that's not a
+missing record, it's a contradiction: an `amount_mismatch` break consuming both —
+unless an explicit, recorded tolerance covers the difference. *Example match:
+`LED-2026-0001` ($49.00, ref `ch_mercadia_0001`) ↔ `txn_ch_0001` (+4900¢, source
+`ch_mercadia_0001`).*
+
+**Pass 4 — Amount + date window.**
 Records still unmatched (e.g. a manual journal entry booked without a PSP reference)
 are paired by exact amount, same currency, and event times within **±2 days**, choosing
 the nearest in time when several qualify (kind: `amount_date_window`). *Example: order
@@ -315,14 +331,28 @@ optimised — simple to explain, deterministic to replay. The demo dataset plant
 same-amount, same-day cluster precisely to exercise these rules; in the real world this
 pass stays deliberately conservative — same cent, same currency, close in time.
 
-**Pass 4 — Leftovers become breaks.**
-Anything still standing alone *is* the finding: a leftover ledger record →
-`missing_in_stripe`; a leftover Stripe record → `missing_in_ledger`. There is no
-"unmatched but probably fine" bucket in Stage 1 — every record ends up in exactly one
-match or exactly one break, provably (a property test asserts this partition for
-thousands of generated scenarios).
+**Pass 5 — Leftovers become breaks (or wait their turn).**
+Anything still standing alone *is* the finding — with three refinements over a blunt
+"missing":
 
-### The four break types, as an accountant would read them
+- **Settlement lag (D12).** A record younger than its source's configured lag window
+  is reported **pending**, not broken — data that legitimately hasn't arrived yet is
+  not a discrepancy, and false breaks teach users to ignore the product. Pending is
+  counted in the run's stats and re-derived every run; past the window, the same
+  record becomes the usual break. The clock is the run's watermark, never the wall.
+- **Unbooked fees.** A leftover external record of type *fee* is `unexpected_fee` —
+  sharper than "missing": the source charged something nobody anticipated.
+- **Reference-less double-posts.** A leftover ledger record identical to an
+  already-matched twin (same account, currency, amount, within a tight window) is a
+  `duplicate_candidate` naming that twin — pointing the human at "we booked twice",
+  not "where is my money".
+
+Everything else: a leftover ledger record → `missing_in_source`; a leftover external
+record → `missing_in_ledger`. Every record ends up in exactly one match, one break,
+or the pending list, provably (a property test asserts this partition for thousands
+of generated scenarios, grouped ones included).
+
+### The break types, as an accountant would read them
 
 | Break type | Plain English | Demo example | Typical resolution |
 |---|---|---|---|
@@ -330,8 +360,8 @@ thousands of generated scenarios).
 | `missing_in_source` | "Your books claim money moved, but the source has no record." | `LED-2026-NS01`: a **$111.11** payment booked, but the charge never settled; `LED-2026-CLD2` (the window-edge booking) and `LED-2026-CLE2` (a reference-less double-post — see the seed README) | Reverse or re-collect; investigate why it was booked |
 | `amount_mismatch` | "Both sides describe the same event but disagree on the amount." | (none planted in the demo) ledger says $49.00, Stripe says $48.90 for the same charge | Find the fee/rounding/entry error; correct the books |
 | `duplicate_candidate` | "The same event appears twice on one side." | `LED-2026-0028-DUP`, the double-posted $85.99 | Reverse the duplicate posting |
-| `unexpected_fee` | "The source charged a fee your books never anticipated." | The **$8.50** Radar fee (`txn_fee_radar_0001`) nobody booked | Book the fee; review the fee schedule |
-| `fx_drift` | "Cross-currency legs disagree beyond what the recorded rate explains." | (arrives with the PagoLat settlement story) | Check the booked rate vs. the recorded run rate |
+| `unexpected_fee` | "The source charged a fee your books never anticipated." | The **$8.50** Radar fee (`txn_fee_radar_0001`) nobody booked; the platform fee PagoLat slipped into the 05-22 settlement | Book the fee; review the fee schedule |
+| `fx_drift` | "Cross-currency legs disagree beyond what the recorded rate explains." | The 05-23 settlement booked at 0.0612 against the run's recorded 0.0588 | Check the booked rate vs. the recorded run rate |
 
 (`missing_in_stripe` was ruleset-v1's name for the second row; historical runs keep
 it, new runs say `missing_in_source` — the engine reconciles more sources than Stripe.)
@@ -403,10 +433,12 @@ matches and breaks are identical to the original's.
 
 | Job | When | What it does |
 |---|---|---|
-| `land-stripe` | on demand (hourly schedule returns with the live client, Stage 2) | lands a 48h overlapping window of balance transactions, then fans out normalization per batch |
+| `land-stripe` | hourly (live API when `STRIPE_LIVE_LANDING=1`; explicit no-op otherwise) | lands a 48h overlapping window of balance transactions, then fans out normalization per batch |
 | `land-ledger` | on demand | same, for the ledger export |
+| `land-pagolat` | on demand | lands settlement day-files; units failing their control totals quarantine whole and are not normalized |
 | `normalize-batch` | fan-out after landing | translates one batch; skips anything already translated |
-| `recon-run` | on demand (nightly, eventually) | one reconciliation run + summary |
+| `dispatch-outbox` | on demand (scheduled in production) | when supersessions/tombstones are waiting, triggers a re-evaluating recon run |
+| `recon-run` | on demand (nightly, eventually) | one reconciliation run + summary; feeds the exceptions worklist and sweeps the outbox |
 | `recon-all` | on demand | the whole pipeline in one go — the demo button |
 | `pnpm recon` (terminal) | on demand | identical to `recon-all`, no job platform needed |
 
@@ -446,20 +478,23 @@ list.
 ## 11. Frequently asked questions
 
 **Q: The amounts differ by one cent. Is that a break?**
-Yes. Stage 1 has no tolerances — same reference + different amount is an
-`amount_mismatch`, full stop. Tolerances (and FX drift handling) arrive in Stage 2 as
-*explicit, recorded* rules, never as silent fuzziness.
+By default, yes — the tolerance is zero. When a tolerance IS configured, it is an
+explicit, recorded rule: the match carries the delta and the tolerance that admitted
+it, never silent fuzziness. Cross-currency comparisons get a basis-point tolerance
+against the run's recorded rate.
 
 **Q: A charge settled three days late. False alarm?**
-In Stage 1, an unmatched record is a break, so yes — you might see it flagged and then
-self-resolve on the next run. Settlement-lag awareness ("inside this source's normal
-lag window it's *pending*, not *missing*") is planned for Stage 2, precisely because
-false breaks teach users to ignore the product.
+Not if the source's settlement-lag window is configured: inside the window the record
+is reported *pending*, not broken (it appears in the run's stats, not the worklist).
+Past the window it becomes a real break. With no lag configured, unmatched means
+break — the conservative default.
 
 **Q: Stripe's fees came out of the payout, not as separate lines. Will that match?**
-Not yet — that's grouped (1:N / N:1) matching: one payout vs. many charges minus fees.
-Stage 2. In Stage 1, separate fee lines (like the demo's Radar fee) surface as
-`missing_in_ledger` until booked.
+The payout itself reconciles 1:1 against the ledger's deposit (the legs sum to zero).
+Settlement *groups* — many PagoLat lines against one booking — match N:1 on a net
+basis. What's deliberately absent is intra-source group integrity ("does this payout
+equal its charges minus fees, inside Stripe?") — that's a completeness check, not a
+cross-source match, and it's parked in the spec's Later list.
 
 **Q: Can someone quietly edit a record to make a break disappear?**
 Not inside Tieout. There is no edit path — only new versions, which leave the old ones
@@ -486,15 +521,17 @@ local machine only; nothing is exposed publicly until the Stage 3 demo app, and
 operational consoles stay behind a private network. Secrets never live in the
 repository, and only Stripe *test mode* keys are ever used.
 
-## 12. What Stage 1 deliberately does not do
+## 12. What the engine deliberately does not do (yet)
 
-So you don't go looking for it: no dashboard or UI (Stage 3), no bank/PagoLat/stablecoin
-sources (Stages 2/4), no grouped 1:N matching, no tolerances or FX conversion, no
-settlement-lag logic, no exceptions workflow (assign/comment/resolve), no webhooks, no
-automatic re-matching when a matched transaction is superseded (the version bookkeeping
-for it is already in place; the event mechanism is Stage 2). Each of these is scoped in
-[`specs/`](specs/) and resisted until its stage — small, verified steps are how an audit
-trail stays trustworthy.
+So you don't go looking for it: no dashboard or UI and no exceptions *screens* — the
+exceptions lifecycle itself (open → acknowledged → resolved, reopened by facts,
+self-resolved when the books get fixed, every transition in an append-only history)
+already runs headless under every recon run; Stage 3 puts faces on it. No bank or
+stablecoin sources and no three-way payout reconciliation (Stage 4). No webhooks
+(poll is truth; webhooks would only ever be freshness hints). No intra-source group
+integrity checks (see the FAQ above). Each of these is scoped in [`specs/`](specs/)
+and resisted until its stage — small, verified steps are how an audit trail stays
+trustworthy.
 
 ## 13. Glossary
 
@@ -515,7 +552,13 @@ trail stays trustworthy.
 | **occurredAt / observedAt** | When the event happened vs. when Tieout learned of it |
 | **Watermark / asOf** | "Everything the system of record contained up to this moment" — a run's fixed snapshot point, re-executable forever |
 | **Recon run** | One execution of the matching game over a snapshot, recorded permanently |
-| **Ruleset** | The versioned rulebook a run used (currently `ruleset-v1`) |
+| **Ruleset** | The versioned rulebook a run used (currently `ruleset-v2`) |
+| **Group / groupRef** | A settlement unit's membership key: lines carry it, the booking's reference names it |
+| **Net (netMinor)** | Amount after the source's own fees — what settlement groups actually deliver |
+| **Tombstone** | The version recording that an identity vanished from a restated unit |
+| **Pending** | Unmatched but inside its source's settlement-lag window — not yet a break |
+| **Exception** | The human-owned case over a recurring break, identified by its fingerprint |
+| **Outbox** | The same-transaction event log announcing supersessions/tombstones for re-evaluation |
 | **Match** | A recorded "these records are counterparts," naming exact transaction versions |
 | **Break** | A typed, explained disagreement between sources — the work product |
 | **Idempotent** | Safe to run twice: the second run changes nothing |

@@ -79,8 +79,13 @@ parameter). That purity is what makes its property tests trustworthy; don't erod
 | Normalization persistence: versions, supersession, quarantine rows (§5) | `packages/db/src/services/normalize.ts` (`normalizeBatch`) | same file |
 | Recon persistence: watermark, as-of selection, runs, matches, breaks (§6, §8) | `packages/db/src/services/recon.ts` (`currentWatermark`, `loadTransactionsAsOf`, `persistReconRun`) | integration test, incl. restate-and-re-execute |
 | Cursors (§4) | `packages/db/src/services/cursors.ts` | services test ("cursors only move forward") |
+| Tombstones: complete units, latest-delivery rule (§4, D8) | `packages/db/src/services/ingest.ts` (`tombstoneVanishedIdentities`) + `normalize.ts` | services tests (restate, resurrect, stale re-land) |
+| Outbox: same-tx events, run coverage (D17/D31) | `packages/db/src/services/outbox.ts`; written in `normalize.ts` | services tests + integration sweep test |
+| Exceptions lifecycle (D18/D30) | `packages/db/src/services/exceptions.ts` | `db/src/test/exceptions.test.ts` |
+| FX rates as data (D7/D29d) | `packages/db/src/services/fx.ts`; conversion in `packages/core/src/money.ts` (`convertMinor`, `isWithinBps`) | money property tests; matcher fx unit tests |
 | Ledger dialect: schema, type/status maps, quarantine (§5) | `packages/adapters/src/ledger/adapter.ts` | golden files in `packages/adapters/fixtures/ledger/` |
-| Stripe dialect (§5) | `packages/adapters/src/stripe/adapter.ts` | golden files in `fixtures/stripe/` |
+| Stripe dialect + live client (§5) | `packages/adapters/src/stripe/adapter.ts` | golden files in `fixtures/stripe/`; pagination + key-guard unit tests |
+| PagoLat dialect: control totals, locale decimals, synthetic ids (§5, D13) | `packages/adapters/src/pagolat/adapter.ts` | golden files in `fixtures/pagolat/` + unit tests |
 | Golden-test harness | `packages/adapters/src/test/golden.ts` | — |
 | Mercadia dataset + planted breaks (§ demo) | `packages/seed/src/generate.ts`; committed output in `packages/seed/data/`; manifest contract in `data/manifest.json` | `seed/src/generate.test.ts` (determinism + committed-files freshness) |
 | Pipeline: land → normalize → recon glue (§9) | `apps/jobs/src/pipeline/pipeline.ts` (also `DEFAULT_MATCH_WINDOW_MS`) | the integration test drives exactly this |
