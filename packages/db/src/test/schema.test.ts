@@ -1,5 +1,14 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { matches, matchMembers, rawRecords, reconRuns, transactions } from "../schema.js";
+import {
+  breaks,
+  exceptions,
+  fxRates,
+  matches,
+  matchMembers,
+  rawRecords,
+  reconRuns,
+  transactions,
+} from "../schema.js";
 import { connectTestDb, insertFixtureRaw, truncateAll, type TestDb } from "./helpers.js";
 
 const OBSERVED = new Date("2026-06-01T00:00:00Z");
@@ -109,6 +118,70 @@ describe("schema constraints are correctness features", () => {
     await db.insert(transactions).values(txnRow(rawId, { sourceId: "big", amountMinor: amount }));
     const [row] = await db.select({ amountMinor: transactions.amountMinor }).from(transactions);
     expect(row!.amountMinor).toBe(amount);
+  });
+
+  it("forbids reporting the same logical break twice in one run", async () => {
+    const { db } = client;
+    const [run] = await db
+      .insert(reconRuns)
+      .values({ asOf: OBSERVED, rulesetVersion: "ruleset-v2", status: "completed", stats: {}, startedAt: OBSERVED })
+      .returning({ id: reconRuns.id });
+    const row = {
+      runId: run!.id,
+      type: "missing_in_ledger" as const,
+      details: { txns: [] },
+      fingerprint: "fp_1",
+    };
+    await db.insert(breaks).values(row);
+    await expectConstraint(db.insert(breaks).values(row), "breaks_run_fingerprint_uq");
+    // Pre-fingerprint historical rows (NULL) are exempt from the uniqueness.
+    await db.insert(breaks).values([
+      { ...row, fingerprint: null },
+      { ...row, fingerprint: null },
+    ]);
+  });
+
+  it("forbids two exceptions for one break fingerprint", async () => {
+    const { db } = client;
+    const [run] = await db
+      .insert(reconRuns)
+      .values({ asOf: OBSERVED, rulesetVersion: "ruleset-v2", status: "completed", stats: {}, startedAt: OBSERVED })
+      .returning({ id: reconRuns.id });
+    const [brk] = await db
+      .insert(breaks)
+      .values({ runId: run!.id, type: "missing_in_ledger", details: { txns: [] }, fingerprint: "fp_x" })
+      .returning({ id: breaks.id });
+    const exceptionRow = {
+      fingerprint: "fp_x",
+      type: "missing_in_ledger" as const,
+      status: "open" as const,
+      firstSeenRunId: run!.id,
+      lastSeenRunId: run!.id,
+      currentBreakId: brk!.id,
+      updatedAt: OBSERVED,
+    };
+    await db.insert(exceptions).values(exceptionRow);
+    await expectConstraint(db.insert(exceptions).values(exceptionRow), "exceptions_fingerprint_uq");
+  });
+
+  it("forbids duplicate fx rates for one (pair, day, source)", async () => {
+    const { db } = client;
+    const rate = { base: "MXN", quote: "USD", rate: "0.058800", rateSource: "test", rateDate: "2026-05-21" };
+    await db.insert(fxRates).values(rate);
+    await expectConstraint(db.insert(fxRates).values({ ...rate, rate: "0.059000" }), "fx_rates_pair_date_source_uq");
+  });
+
+  it("stores netMinor beyond Number.MAX_SAFE_INTEGER and roundtrips groupRef", async () => {
+    const { db } = client;
+    const { rawId } = await insertFixtureRaw(db, { source: "ledger", sourceAccount: "acct_main", sourceId: "net" });
+    const net = 9007199254740995n;
+    await db
+      .insert(transactions)
+      .values(txnRow(rawId, { sourceId: "net", netMinor: net, groupRef: "PL-2026-05-21" }));
+    const [row] = await db
+      .select({ netMinor: transactions.netMinor, groupRef: transactions.groupRef })
+      .from(transactions);
+    expect(row).toEqual({ netMinor: net, groupRef: "PL-2026-05-21" });
   });
 
   it("forbids one transaction in two matches within a run", async () => {
