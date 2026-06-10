@@ -16,6 +16,14 @@ import type {
  *   3. Fallback `(amountMinor, currency, occurredAt ± window)` 1:1, nearest in time.
  *   4. Leftovers become `missing_in_stripe` / `missing_in_ledger`.
  *
+ * Tie-breaking is part of the ruleset, not an accident: everything resolves through
+ * the canonical order `(occurredAt, sourceId, id)` — total, and decided by stable
+ * source-derived keys (two records on one side always differ in `sourceId`). Pass 1
+ * keeps the canonically-first duplicate; pass 3 lets each ledger record, in canonical
+ * order, claim its nearest surviving counterpart, with exact-distance ties going to
+ * the canonically-earlier candidate. Greedy and auditable rather than globally
+ * optimised — simple to explain, deterministic to replay.
+ *
  * Pure and deterministic: inputs are sorted canonically first, so result is
  * independent of input order. Time is data (`occurredAt`), never a clock read.
  */
