@@ -10,7 +10,7 @@ import {
 import { seedFiles, seedPagolatFilePaths } from "@tieout/seed";
 
 /** The demo Stripe account. A real connection would come from configuration. */
-export const STRIPE_SEED_ACCOUNT = "acct_mercadia";
+const STRIPE_SEED_ACCOUNT = "acct_mercadia";
 
 /** The demo sources are wired to the committed seed dataset — no network anywhere (D25). */
 export function createSeedAdapters(): Record<string, SourceAdapter> {
