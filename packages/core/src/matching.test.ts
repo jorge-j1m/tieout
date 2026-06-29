@@ -21,7 +21,6 @@ function txn(over: Partial<MatchableTxn> & { id: string; source: string }): Matc
     sourceAccount: "acct_main",
     sourceId: over.id,
     type: "payment",
-    status: "settled",
     amountMinor,
     netMinor: amountMinor,
     currency: "USD",
@@ -497,71 +496,39 @@ describe("reconcile — settlement lag (pending, not breaks)", () => {
 // --- Property tests -------------------------------------------------------
 
 // Small pools of amounts/references/timestamps force collisions: duplicates,
-// mismatches, and fallback candidates all occur organically.
-const arbSide = (source: string) =>
-  fc
-    .array(
-      fc.record({
-        amountIdx: fc.integer({ min: 0, max: 8 }),
-        minuteOffset: fc.integer({ min: 0, max: 12 * 24 * 60 }),
-        refIdx: fc.option(fc.integer({ min: 0, max: 6 }), { nil: null }),
-        mismatch: fc.boolean(),
-      }),
-      { maxLength: 25 },
-    )
-    .map((items) =>
-      items.map((it, i): MatchableTxn => {
-        const amountMinor = 5_000n + BigInt(it.amountIdx) * 137n + (it.mismatch ? 1n : 0n);
-        return {
-          id: `${source}_${i}`,
-          version: 1,
-          source,
-          sourceAccount: "acct_main",
-          sourceId: `${source}_sid_${i}`,
-          type: "payment",
-          status: "settled",
-          amountMinor,
-          netMinor: amountMinor,
-          currency: "USD",
-          occurredAt: new Date(BASE.getTime() + it.minuteOffset * 60_000),
-          reference: it.refIdx === null ? null : `ref_${it.refIdx}`,
-          groupRef: null,
-        };
-      }),
-    );
+// mismatches, and fallback candidates all occur organically. The tie pool's
+// 2-hour grid with even tinier pools forces exact ties and equidistant
+// candidates by construction, not by luck — the tie-break rules get property
+// coverage too.
+interface PoolParams {
+  amountMax: number;
+  refMax: number;
+  slotMax: number;
+  slotMs: number;
+}
 
-// A 2-hour time grid with tiny pools: exact ties and equidistant candidates occur
-// by construction, not by luck — the tie-break rules get property coverage too.
-const arbTieSide = (source: string) =>
+const arbSide = (source: string, pool: PoolParams) =>
   fc
     .array(
       fc.record({
-        amountIdx: fc.integer({ min: 0, max: 3 }),
-        hourSlot: fc.integer({ min: 0, max: 6 }),
-        refIdx: fc.option(fc.integer({ min: 0, max: 3 }), { nil: null }),
+        amountIdx: fc.integer({ min: 0, max: pool.amountMax }),
+        slot: fc.integer({ min: 0, max: pool.slotMax }),
+        refIdx: fc.option(fc.integer({ min: 0, max: pool.refMax }), { nil: null }),
         mismatch: fc.boolean(),
       }),
       { maxLength: 25 },
     )
     .map((items) =>
-      items.map((it, i): MatchableTxn => {
-        const amountMinor = 5_000n + BigInt(it.amountIdx) * 137n + (it.mismatch ? 1n : 0n);
-        return {
+      items.map((it, i) =>
+        txn({
           id: `${source}_${i}`,
-          version: 1,
           source,
-          sourceAccount: "acct_main",
           sourceId: `${source}_sid_${i}`,
-          type: "payment",
-          status: "settled",
-          amountMinor,
-          netMinor: amountMinor,
-          currency: "USD",
-          occurredAt: new Date(BASE.getTime() + it.hourSlot * 2 * HOUR_MS),
+          amountMinor: 5_000n + BigInt(it.amountIdx) * 137n + (it.mismatch ? 1n : 0n),
+          occurredAt: new Date(BASE.getTime() + it.slot * pool.slotMs),
           reference: it.refIdx === null ? null : `ref_${it.refIdx}`,
-          groupRef: null,
-        };
-      }),
+        }),
+      ),
     );
 
 // Settlement-shaped scenarios: groups whose anchors book the exact net sum, a
@@ -586,59 +553,46 @@ const arbGroups: fc.Arbitrary<GroupScenario> = fc
     const external: MatchableTxn[] = [];
     specs.forEach((spec, g) => {
       const key = `PL-G${g}`;
+      const occurredAt = new Date(BASE.getTime() + g * HOUR_MS);
       let net = 0n;
       spec.partNets.forEach((partNet, i) => {
         net += partNet;
-        external.push({
-          id: `e_g${g}_${i}`,
-          version: 1,
-          source: "pagolat",
-          sourceAccount: "mx-merchant",
-          sourceId: `e_g${g}_${i}`,
-          type: "payment",
-          status: "settled",
-          amountMinor: partNet + 100n,
-          netMinor: partNet,
-          currency: "USD",
-          occurredAt: new Date(BASE.getTime() + g * HOUR_MS),
-          reference: null,
-          groupRef: key,
-        });
+        external.push(
+          txn({
+            id: `e_g${g}_${i}`,
+            source: "pagolat",
+            sourceAccount: "mx-merchant",
+            amountMinor: partNet + 100n,
+            netMinor: partNet,
+            occurredAt,
+            groupRef: key,
+          }),
+        );
       });
       if (spec.surpriseFee !== null) {
-        external.push({
-          id: `e_g${g}_fee`,
-          version: 1,
-          source: "pagolat",
-          sourceAccount: "mx-merchant",
-          sourceId: `e_g${g}_fee`,
-          type: "fee",
-          status: "settled",
-          amountMinor: -spec.surpriseFee,
-          netMinor: -spec.surpriseFee,
-          currency: "USD",
-          occurredAt: new Date(BASE.getTime() + g * HOUR_MS),
-          reference: null,
-          groupRef: key,
-        });
+        external.push(
+          txn({
+            id: `e_g${g}_fee`,
+            source: "pagolat",
+            sourceAccount: "mx-merchant",
+            type: "fee",
+            amountMinor: -spec.surpriseFee,
+            occurredAt,
+            groupRef: key,
+          }),
+        );
       }
       if (spec.anchorPresent) {
-        ledger.push({
-          id: `l_g${g}`,
-          version: 1,
-          source: "ledger",
-          sourceAccount: "acct_main",
-          sourceId: `l_g${g}`,
-          type: "payment",
-          status: "settled",
-          // Books the clean net sum; corruption and surprise fees make it disagree.
-          amountMinor: net + (spec.corruptBy ?? 0n),
-          netMinor: net + (spec.corruptBy ?? 0n),
-          currency: "USD",
-          occurredAt: new Date(BASE.getTime() + g * HOUR_MS),
-          reference: key,
-          groupRef: null,
-        });
+        ledger.push(
+          txn({
+            id: `l_g${g}`,
+            source: "ledger",
+            // Books the clean net sum; corruption and surprise fees make it disagree.
+            amountMinor: net + (spec.corruptBy ?? 0n),
+            occurredAt,
+            reference: key,
+          }),
+        );
       }
     });
     return { ledger, external };
@@ -656,12 +610,13 @@ function serialize(result: ReconcileResult): string {
   return JSON.stringify(result);
 }
 
-const POOLS = [
-  ["collision pool", arbSide],
-  ["tie pool", arbTieSide],
-] as const;
+const POOLS: [string, PoolParams][] = [
+  ["collision pool", { amountMax: 8, refMax: 6, slotMax: 12 * 24 * 60, slotMs: 60_000 }],
+  ["tie pool", { amountMax: 3, refMax: 3, slotMax: 6, slotMs: 2 * HOUR_MS }],
+];
 
-for (const [pool, side] of POOLS) {
+for (const [pool, params] of POOLS) {
+  const side = (source: string) => arbSide(source, params);
   describe(`reconcile — ruleset-v2 invariants (${pool})`, () => {
     it("partitions every transaction into exactly one match, break, or pending", () => {
       fc.assert(

@@ -64,8 +64,8 @@ describe("convertMinor — fx at match time (D7)", () => {
     expect(convertMinor(5n, "USD", "USD", parseRate("0.5"))).toBe(2n);
     // 0.15 at rate 0.5 → 0.075 → 8.
     expect(convertMinor(15n, "USD", "USD", parseRate("0.5"))).toBe(8n);
-    // Above the tie rounds normally: 0.051 · 0.5 ... 26n? use thirds: 1/0.3.
-    expect(convertMinor(7n, "USD", "USD", parseRate("0.51"))).toBe(4n); // 3.57 → 4
+    // Off the tie it rounds normally: 0.07 at 0.51 → 3.57 → 4.
+    expect(convertMinor(7n, "USD", "USD", parseRate("0.51"))).toBe(4n);
   });
 
   it("rejects malformed and non-positive rates", () => {

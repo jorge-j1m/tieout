@@ -4,7 +4,6 @@ import type {
   FxRateInput,
   MatchProposal,
   PendingProposal,
-  TxnStatus,
 } from "@tieout/contracts";
 import { convertMinor, isWithinBps, parseRate, type ParsedRate } from "./money.js";
 
@@ -48,7 +47,6 @@ export interface MatchableTxn {
   sourceAccount: string;
   sourceId: string;
   type: CanonicalTxnType;
-  status: TxnStatus;
   amountMinor: bigint;
   /** Net of source-side fees; loaders canonicalize unknown (pre-v2) values to the amount. */
   netMinor: bigint;
@@ -178,6 +176,7 @@ export function reconcile(
   const ledger = [...ledgerIn].sort(canonicalOrder);
   const external = [...externalIn].sort(canonicalOrder);
   const tolerance = config.toleranceMinor ?? 0n;
+  const fxToleranceBps = config.fx?.toleranceBps ?? 0;
   const rateBook = new RateBook(config.fx?.rates ?? []);
   const matches: MatchProposal[] = [];
   const breaks: BreakProposal[] = [];
@@ -214,12 +213,40 @@ export function reconcile(
     const fx = {
       ...fxDetail(rate),
       convertedMinor: converted.toString(),
-      toleranceBps: config.fx?.toleranceBps ?? 0,
+      toleranceBps: fxToleranceBps,
     };
-    if (isWithinBps(ledgerValue, converted, config.fx?.toleranceBps ?? 0)) {
+    if (isWithinBps(ledgerValue, converted, fxToleranceBps)) {
       return { verdict: "match", details: { fx } };
     }
     return { verdict: "fx_drift", details: { fx } };
+  }
+
+  /**
+   * Sum parts' nets in the target currency: per-currency subtotals, each converted
+   * at most once — minimal rounding. Every rate used is returned, sorted by currency.
+   */
+  function convertedNetSum(
+    parts: readonly MatchableTxn[],
+    target: string,
+  ): { sum: bigint; fxUsed: Record<string, unknown>[] } {
+    const subtotals = new Map<string, bigint>();
+    for (const p of parts) {
+      subtotals.set(p.currency, (subtotals.get(p.currency) ?? 0n) + p.netMinor);
+    }
+    let sum = 0n;
+    const fxUsed: Record<string, unknown>[] = [];
+    for (const [currency, subtotal] of [...subtotals.entries()].sort(([a], [b]) =>
+      compareStrings(a, b),
+    )) {
+      if (currency === target) {
+        sum += subtotal;
+      } else {
+        const rate = rateBook.get(currency, target);
+        sum += convertMinor(subtotal, currency, target, rate.parsed);
+        fxUsed.push({ ...fxDetail(rate), toleranceBps: fxToleranceBps });
+      }
+    }
+    return { sum, fxUsed };
   }
 
   // Phase 1 — same-side duplicate references. The canonical first occurrence stays
@@ -257,50 +284,30 @@ export function reconcile(
   // are one delivery; the ledger txn whose reference names the key is its booking.
   // Compared on nets — fees the source kept never arrive. Groups claim their anchor
   // before the 1:1 passes can.
-  const groups = new Map<string, MatchableTxn[]>();
+  const groups = new Map<string, { source: string; groupRef: string; parts: MatchableTxn[] }>();
   for (const t of external) {
     if (t.groupRef === null || consumed.has(t.id)) continue;
-    const key = `${t.source} ${t.groupRef}`;
-    const bucket = groups.get(key);
-    if (bucket === undefined) groups.set(key, [t]);
-    else bucket.push(t);
+    const key = `${t.source}\u0000${t.groupRef}`;
+    const group = groups.get(key);
+    if (group === undefined) groups.set(key, { source: t.source, groupRef: t.groupRef, parts: [t] });
+    else group.parts.push(t);
   }
   const ledgerByRef = new Map<string, MatchableTxn>();
   for (const l of ledger) {
     if (l.reference !== null && !consumed.has(l.id)) ledgerByRef.set(l.reference, l);
   }
-  for (const [key, parts] of [...groups.entries()].sort(([a], [b]) => compareStrings(a, b))) {
-    const groupRef = key.slice(key.indexOf(" ") + 1);
-    const source = key.slice(0, key.indexOf(" "));
+  for (const { source, groupRef, parts } of [...groups.values()].sort(
+    (a, b) => compareStrings(a.source, b.source) || compareStrings(a.groupRef, b.groupRef),
+  )) {
     const anchor = ledgerByRef.get(groupRef);
     if (anchor === undefined || consumed.has(anchor.id)) continue; // parts fall through to leftover classification
 
-    // Per-currency subtotals, each converted at most once — minimal rounding.
-    const subtotals = new Map<string, bigint>();
-    for (const p of parts) {
-      subtotals.set(p.currency, (subtotals.get(p.currency) ?? 0n) + p.netMinor);
-    }
-    let sum = 0n;
-    let fxUsed: Record<string, unknown> | undefined;
-    let drift = false;
-    for (const [currency, subtotal] of [...subtotals.entries()].sort(([a], [b]) =>
-      compareStrings(a, b),
-    )) {
-      if (currency === anchor.currency) {
-        sum += subtotal;
-      } else {
-        const rate = rateBook.get(currency, anchor.currency);
-        sum += convertMinor(subtotal, currency, anchor.currency, rate.parsed);
-        fxUsed = { ...fxDetail(rate), toleranceBps: config.fx?.toleranceBps ?? 0 };
-      }
-    }
-
-    const crossCurrency = fxUsed !== undefined;
+    const { sum, fxUsed } = convertedNetSum(parts, anchor.currency);
+    const crossCurrency = fxUsed.length > 0;
     const delta = abs(anchor.netMinor - sum);
     const within = crossCurrency
-      ? isWithinBps(anchor.netMinor, sum, config.fx?.toleranceBps ?? 0)
+      ? isWithinBps(anchor.netMinor, sum, fxToleranceBps)
       : delta <= tolerance;
-    if (!within && crossCurrency) drift = true;
 
     const consumeAll = () => {
       consumed.add(anchor.id);
@@ -312,7 +319,7 @@ export function reconcile(
       partCount: parts.length,
       anchorNetMinor: anchor.netMinor.toString(),
       partsNetMinor: sum.toString(),
-      ...(fxUsed === undefined ? {} : { fx: fxUsed }),
+      ...(crossCurrency ? { fx: fxUsed.length === 1 ? fxUsed[0] : fxUsed } : {}),
     };
 
     if (within) {
@@ -338,19 +345,7 @@ export function reconcile(
     // fees. Fee subtotals convert with the same run rate; when rounding makes the
     // explanation inexact, the generic break stands — never an approximate claim.
     const feeParts = parts.filter((p) => p.type === "fee");
-    let feeSum = 0n;
-    const feeSubtotals = new Map<string, bigint>();
-    for (const p of feeParts) {
-      feeSubtotals.set(p.currency, (feeSubtotals.get(p.currency) ?? 0n) + p.netMinor);
-    }
-    for (const [currency, subtotal] of [...feeSubtotals.entries()].sort(([a], [b]) =>
-      compareStrings(a, b),
-    )) {
-      feeSum +=
-        currency === anchor.currency
-          ? subtotal
-          : convertMinor(subtotal, currency, anchor.currency, rateBook.get(currency, anchor.currency).parsed);
-    }
+    const feeSum = convertedNetSum(feeParts, anchor.currency).sum;
     if (feeParts.length > 0 && anchor.netMinor - sum === -feeSum) {
       breaks.push({
         type: "unexpected_fee",
@@ -361,7 +356,7 @@ export function reconcile(
           txns: allTxns,
         },
       });
-    } else if (drift) {
+    } else if (crossCurrency) {
       breaks.push({
         type: "fx_drift",
         details: { ...groupDetails, deltaMinor: delta.toString(), txns: allTxns },
@@ -387,7 +382,7 @@ export function reconcile(
   for (const l of ledger) {
     if (l.reference === null || consumed.has(l.id)) continue;
     const s = externalByRef.get(l.reference);
-    if (s === undefined || consumed.has(s.id)) continue;
+    if (s === undefined) continue;
     consumed.add(l.id);
     consumed.add(s.id);
 
@@ -496,16 +491,13 @@ export function reconcile(
     }
   }
 
-  // Matched reference-less ledger twins, for the double-post heuristic.
+  // Matched reference-less ledger twins, for the double-post heuristic. A consumed
+  // reference-less ledger txn was necessarily matched by the fallback pass — every
+  // other pass that consumes ledger requires a reference.
   const duplicateWindow = config.duplicateWindowMs ?? 0;
   const matchedLedger =
     duplicateWindow > 0
-      ? ledger.filter(
-          (l) =>
-            consumed.has(l.id) &&
-            l.reference === null &&
-            matches.some((m) => m.members.some((r) => r.id === l.id)),
-        )
+      ? ledger.filter((l) => consumed.has(l.id) && l.reference === null)
       : [];
 
   for (const l of ledger) {

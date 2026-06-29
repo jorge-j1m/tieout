@@ -232,7 +232,6 @@ export function normalizePagolatLine(raw: RawForNormalize): NormalizeResult {
 export interface PagolatAdapterConfig {
   /** Day-file paths — each file is one complete, re-deliverable settlement unit. */
   files: string[];
-  connection?: string;
 }
 
 export function createPagolatAdapter(config: PagolatAdapterConfig): SourceAdapter {
@@ -263,7 +262,7 @@ export function createPagolatAdapter(config: PagolatAdapterConfig): SourceAdapte
         const occurrence = new Map<string, number>();
         batches.push({
           source: PAGOLAT_SOURCE,
-          connection: config.connection ?? "sftp-drop",
+          connection: "sftp-drop",
           kind: "file",
           externalRef: fileName,
           idempotencyKey: `${unitKey}:${fileHash}`,

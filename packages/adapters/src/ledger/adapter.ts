@@ -107,7 +107,6 @@ export function normalizeLedgerEntry(raw: RawForNormalize): NormalizeResult {
 export interface LedgerAdapterConfig {
   /** JSON array of ledger entries — the seeded internal system of record. */
   dataFile: string;
-  connection?: string;
 }
 
 export function createLedgerAdapter(config: LedgerAdapterConfig): SourceAdapter {
@@ -128,7 +127,7 @@ export function createLedgerAdapter(config: LedgerAdapterConfig): SourceAdapter 
       return [
         {
           source: LEDGER_SOURCE,
-          connection: config.connection ?? "seed",
+          connection: "seed",
           kind: "file",
           externalRef: path.basename(config.dataFile),
           idempotencyKey: `ledger:file:${fileHash}`,

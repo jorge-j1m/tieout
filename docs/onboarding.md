@@ -88,7 +88,7 @@ parameter). That purity is what makes its property tests trustworthy; don't erod
 | PagoLat dialect: control totals, locale decimals, synthetic ids (§5, D13) | `packages/adapters/src/pagolat/adapter.ts` | golden files in `fixtures/pagolat/` + unit tests |
 | Golden-test harness | `packages/adapters/src/test/golden.ts` | — |
 | Mercadia dataset + planted breaks (§ demo) | `packages/seed/src/generate.ts`; committed output in `packages/seed/data/`; manifest contract in `data/manifest.json` | `seed/src/generate.test.ts` (determinism + committed-files freshness) |
-| Pipeline: land → normalize → recon glue, ruleset knob defaults (§9) | `apps/jobs/src/pipeline/pipeline.ts` (`DEFAULT_MATCH_WINDOW_MS`, `DEFAULT_DUPLICATE_WINDOW_MS`, `DEFAULT_FX_TOLERANCE_BPS`) | the integration test drives exactly this |
+| Pipeline: land → normalize → recon glue, ruleset knob defaults (§9) | `apps/jobs/src/pipeline/pipeline.ts` (`MATCH_WINDOW_MS`, `DUPLICATE_WINDOW_MS`, `FX_TOLERANCE_BPS`) | the integration test drives exactly this |
 | Trigger.dev tasks (§9) | `apps/jobs/src/trigger/*.ts` (thin wrappers — keep them thin) | — |
 | `pnpm recon` CLI | `apps/jobs/src/cli/recon.ts` | — |
 | Stage acceptance, end to end (incl. tombstones, lag, outbox sweep, replay) | `apps/jobs/src/test/integration.test.ts` | itself |

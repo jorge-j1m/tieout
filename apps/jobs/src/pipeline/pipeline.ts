@@ -19,11 +19,11 @@ import {
 } from "@tieout/db";
 
 /** Fallback matching window: occurredAt within ±2 days. */
-export const DEFAULT_MATCH_WINDOW_MS = 2 * 86_400_000;
+const MATCH_WINDOW_MS = 2 * 86_400_000;
 /** Reference-less double-post heuristic window (D29h). */
-export const DEFAULT_DUPLICATE_WINDOW_MS = 3_600_000;
+const DUPLICATE_WINDOW_MS = 3_600_000;
 /** Cross-currency drift tolerance when rates are configured (D29a). */
-export const DEFAULT_FX_TOLERANCE_BPS = 10;
+const FX_TOLERANCE_BPS = 10;
 
 export interface Window {
   from: Date;
@@ -48,28 +48,11 @@ export async function landSource(
   return results;
 }
 
-export async function normalizeBatches(
-  db: Db,
-  adapter: SourceAdapter,
-  batchIds: string[],
-  now: Date,
-): Promise<NormalizeBatchResult[]> {
-  const results: NormalizeBatchResult[] = [];
-  for (const batchId of batchIds) {
-    results.push(await normalizeBatch(db, adapter, batchId, now));
-  }
-  return results;
-}
-
 export interface ReconOptions {
   now: Date;
   asOf?: Date;
-  windowMs?: number;
-  /** Ruleset-v2 knobs, all recorded in run stats so runs stay self-describing. */
-  toleranceMinor?: bigint;
-  fx?: { rates: FxRateInput[]; toleranceBps: number };
+  /** Per-source settlement-lag windows (D12/D29e), recorded in run stats. */
   lagMsBySource?: Record<string, number>;
-  duplicateWindowMs?: number;
 }
 
 /**
@@ -92,7 +75,6 @@ export async function runRecon(db: Db, opts: ReconOptions): Promise<ReconSummary
     sourceAccount: t.sourceAccount,
     sourceId: t.sourceId,
     type: t.type,
-    status: t.status,
     amountMinor: t.amountMinor,
     // Rows normalized before the concept existed mean "net equals amount".
     netMinor: t.netMinor ?? t.amountMinor,
@@ -107,18 +89,15 @@ export async function runRecon(db: Db, opts: ReconOptions): Promise<ReconSummary
   const ledger = live.filter((t) => t.source === "ledger").map(toMatchable);
   const external = live.filter((t) => t.source !== "ledger").map(toMatchable);
 
-  // The run's rate set comes from the fx_rates table unless the caller injected
-  // one — either way the matcher records what it applied (D29d).
-  const fxRates = opts.fx?.rates ?? (await loadFxRatesAsOf(db, asOf));
+  // The run's rate set is whatever fx_rates holds at the watermark; the matcher
+  // records what it applied (D29d).
+  const fxRates = await loadFxRatesAsOf(db, asOf);
   const config: MatchingConfig = {
-    windowMs: opts.windowMs ?? DEFAULT_MATCH_WINDOW_MS,
+    windowMs: MATCH_WINDOW_MS,
     asOf,
-    ...(opts.toleranceMinor !== undefined ? { toleranceMinor: opts.toleranceMinor } : {}),
-    ...(fxRates.length > 0
-      ? { fx: { rates: fxRates, toleranceBps: opts.fx?.toleranceBps ?? DEFAULT_FX_TOLERANCE_BPS } }
-      : {}),
-    ...(opts.lagMsBySource !== undefined ? { lagMsBySource: opts.lagMsBySource } : {}),
-    duplicateWindowMs: opts.duplicateWindowMs ?? DEFAULT_DUPLICATE_WINDOW_MS,
+    ...(fxRates.length > 0 ? { fx: { rates: fxRates, toleranceBps: FX_TOLERANCE_BPS } } : {}),
+    lagMsBySource: opts.lagMsBySource,
+    duplicateWindowMs: DUPLICATE_WINDOW_MS,
   };
   const { matches, breaks, pending } = reconcile(ledger, external, config);
 
@@ -200,28 +179,24 @@ export interface FullReconResult {
 export async function fullRecon(
   db: Db,
   adapters: Record<string, SourceAdapter>,
-  opts: { now: Date; window?: Window; fxRates?: FxRateInput[]; lagMsBySource?: Record<string, number> },
+  opts: { now: Date; fxRates?: FxRateInput[]; lagMsBySource?: Record<string, number> },
 ): Promise<FullReconResult> {
   if (opts.fxRates !== undefined) {
     await upsertFxRates(db, opts.fxRates);
   }
-  const window = opts.window ?? { from: new Date(0), to: opts.now };
+  const window = { from: new Date(0), to: opts.now };
   const landed: Record<string, LandResult[]> = {};
   const normalized: Record<string, NormalizeBatchResult[]> = {};
   for (const adapter of Object.values(adapters)) {
     const results = await landSource(db, adapter, window, opts.now);
     landed[adapter.source] = results;
-    normalized[adapter.source] = await normalizeBatches(
-      db,
-      adapter,
-      results.filter((r) => !r.batchQuarantined).map((r) => r.batchId),
-      opts.now,
-    );
+    const batches: NormalizeBatchResult[] = [];
+    for (const r of results.filter((r) => !r.batchQuarantined)) {
+      batches.push(await normalizeBatch(db, adapter, r.batchId, opts.now));
+    }
+    normalized[adapter.source] = batches;
   }
-  const summary = await runRecon(db, {
-    now: opts.now,
-    ...(opts.lagMsBySource !== undefined ? { lagMsBySource: opts.lagMsBySource } : {}),
-  });
+  const summary = await runRecon(db, { now: opts.now, lagMsBySource: opts.lagMsBySource });
   return { landed, normalized, summary };
 }
 
