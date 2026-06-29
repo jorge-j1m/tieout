@@ -10,7 +10,7 @@ import type {
   TxnStatus,
 } from "@tieout/contracts";
 import { normalizedTxnSchema } from "@tieout/contracts";
-import { contentHash, isKnownCurrency } from "@tieout/core";
+import { canonicalJson, contentHash, isKnownCurrency, syntheticSourceId } from "@tieout/core";
 import { quarantine, quarantineFromZod } from "../quarantine.js";
 
 export const STRIPE_SOURCE = "stripe";
@@ -119,7 +119,6 @@ export interface StripeAdapterConfig {
   live?: StripeLiveConfig;
   /** Stripe account id (acct_…) — the sourceAccount of every record. */
   account: string;
-  connection?: string;
 }
 
 /** Paginate /v1/balance_transactions for a window — the only part the live client replaces (D25). */
@@ -193,7 +192,7 @@ export function createStripeAdapter(config: StripeAdapterConfig): SourceAdapter 
       return [
         {
           source: STRIPE_SOURCE,
-          connection: config.connection ?? (config.live ? "api" : "fixture"),
+          connection: config.live ? "api" : "fixture",
           kind: "api",
           externalRef,
           idempotencyKey,
@@ -205,7 +204,7 @@ export function createStripeAdapter(config: StripeAdapterConfig): SourceAdapter 
               sourceId:
                 typeof candidate.id === "string" && candidate.id !== ""
                   ? candidate.id
-                  : `missing_id_${index}`,
+                  : syntheticSourceId(idempotencyKey, canonicalJson(bt), index),
               payload: bt,
             };
           }),

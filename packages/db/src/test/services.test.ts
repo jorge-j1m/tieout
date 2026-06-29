@@ -376,6 +376,44 @@ describe("ingestion services", () => {
     expect(current[0]).toMatchObject({ version: 3, isTombstone: false, amountMinor: 1000n });
   });
 
+  it("re-landing an older delivery of a complete unit is stale — it cannot resurrect removals (D8)", async () => {
+    const { db } = client;
+    const unit = { key: "ledger:entries.json" };
+    const deliveryA = batch(
+      "ledger:v1",
+      [record("e1", { amountMinor: "1000" }), record("e2", { amountMinor: "2000" })],
+      { completeUnit: unit },
+    );
+    await landBatch(db, deliveryA, NOW);
+    // The restated file no longer contains e2.
+    await landBatch(
+      db,
+      batch("ledger:v2", [record("e1", { amountMinor: "1000" })], { completeUnit: unit }),
+      LATER,
+    );
+
+    // A pipeline re-run replays the pre-restatement delivery: history, not state.
+    const EVEN_LATER = new Date("2026-06-03T00:00:00Z");
+    const relanded = await landBatch(db, deliveryA, EVEN_LATER);
+    expect(relanded).toMatchObject({
+      batchExisted: true,
+      staleUnit: true,
+      rawInserted: 0,
+      rawSkipped: 2,
+      tombstoned: 0,
+    });
+
+    // No new raw versions, and e2's tombstone stays the latest word.
+    expect(await db.select().from(rawRecords)).toHaveLength(3);
+    const e2 = await db
+      .select()
+      .from(rawRecords)
+      .where(eq(rawRecords.sourceId, "e2"))
+      .orderBy(asc(rawRecords.version));
+    expect(e2).toHaveLength(2);
+    expect(e2[1]).toMatchObject({ version: 2, isTombstone: true });
+  });
+
   it("a supersession writes exactly one outbox event, in the same transaction (D17)", async () => {
     const { db } = client;
     const w1 = await landBatch(db, batch("ledger:w1", [record("e1", { amountMinor: "1000" })]), NOW);

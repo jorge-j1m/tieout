@@ -3,6 +3,7 @@ import type { OutboxTopic, SourceAdapter } from "@tieout/contracts";
 import { contentHash } from "@tieout/core";
 import type { Db } from "../client.js";
 import { ingestionBatches, outbox, quarantinedRecords, rawRecords, transactions } from "../schema.js";
+import { identityKey } from "./identity.js";
 
 export interface NormalizeBatchResult {
   batchId: string;
@@ -63,6 +64,33 @@ function outputHash(t: {
   });
 }
 
+/** The canonical projection as a select list — the columns `outputHash` consumes. */
+const canonicalColumns = {
+  source: transactions.source,
+  sourceAccount: transactions.sourceAccount,
+  sourceId: transactions.sourceId,
+  sourceType: transactions.sourceType,
+  type: transactions.type,
+  amountMinor: transactions.amountMinor,
+  netMinor: transactions.netMinor,
+  currency: transactions.currency,
+  occurredAt: transactions.occurredAt,
+  valueDate: transactions.valueDate,
+  account: transactions.account,
+  reference: transactions.reference,
+  groupRef: transactions.groupRef,
+  status: transactions.status,
+  metadata: transactions.metadata,
+};
+
+/**
+ * Failure-rate circuit breaker (D14): when more than this fraction of a batch's
+ * pending records quarantine, the batch halts — quarantine rows are written (the
+ * worklist), but no transactions: a batch failing this hard usually means the
+ * feed drifted, and the "parseable" remainder is not to be trusted either.
+ */
+const MAX_QUARANTINE_RATE = 0.5;
+
 /**
  * Normalize every raw record of a batch that this normalizer version hasn't
  * processed yet. Output is versioned: a new transaction for an identity that
@@ -72,24 +100,12 @@ function outputHash(t: {
  * nothing (D26). Idempotent via the (rawId, normalizerVersion) uniqueness on
  * both written outputs; unchanged skips are recomputed (pure, cheap) on re-runs.
  */
-export interface NormalizeOptions {
-  /**
-   * Failure-rate circuit breaker (D14): when more than this fraction of a batch's
-   * pending records quarantine, the batch halts — quarantine rows are written (the
-   * worklist), but no transactions: a batch failing this hard usually means the
-   * feed drifted, and the "parseable" remainder is not to be trusted either.
-   */
-  maxQuarantineRate?: number;
-}
-
 export async function normalizeBatch(
   db: Db,
   adapter: SourceAdapter,
   batchId: string,
   now: Date,
-  options: NormalizeOptions = {},
 ): Promise<NormalizeBatchResult> {
-  const maxQuarantineRate = options.maxQuarantineRate ?? 0.5;
   return db.transaction(async (tx) => {
     const raws = await tx
       .select()
@@ -148,24 +164,7 @@ export async function normalizeBatch(
     const priorOutputsByRaw = new Map<string, Set<string>>();
     if (pending.length > 0) {
       const prior = await tx
-        .select({
-          rawId: transactions.rawId,
-          source: transactions.source,
-          sourceAccount: transactions.sourceAccount,
-          sourceId: transactions.sourceId,
-          sourceType: transactions.sourceType,
-          type: transactions.type,
-          amountMinor: transactions.amountMinor,
-          netMinor: transactions.netMinor,
-          currency: transactions.currency,
-          occurredAt: transactions.occurredAt,
-          valueDate: transactions.valueDate,
-          account: transactions.account,
-          reference: transactions.reference,
-          groupRef: transactions.groupRef,
-          status: transactions.status,
-          metadata: transactions.metadata,
-        })
+        .select({ rawId: transactions.rawId, ...canonicalColumns })
         .from(transactions)
         .where(
           inArray(
@@ -182,57 +181,20 @@ export async function normalizeBatch(
 
     // Current transaction per affected identity, for version chaining, supersession,
     // and the canonical fields a tombstone version carries forward.
-    type CurrentTxn = {
-      id: string;
-      sourceAccount: string;
-      sourceId: string;
-      version: number;
-      sourceType: string;
-      type: (typeof transactions.$inferSelect)["type"];
-      amountMinor: bigint;
-      netMinor: bigint | null;
-      currency: string;
-      occurredAt: Date;
-      valueDate: string | null;
-      account: string;
-      reference: string | null;
-      groupRef: string | null;
-      status: (typeof transactions.$inferSelect)["status"];
-      metadata: unknown;
-    };
-    const currentByKey = new Map<string, CurrentTxn>();
-    if (pending.length > 0) {
-      const currents = await tx
-        .select({
-          id: transactions.id,
-          sourceAccount: transactions.sourceAccount,
-          sourceId: transactions.sourceId,
-          version: transactions.version,
-          sourceType: transactions.sourceType,
-          type: transactions.type,
-          amountMinor: transactions.amountMinor,
-          netMinor: transactions.netMinor,
-          currency: transactions.currency,
-          occurredAt: transactions.occurredAt,
-          valueDate: transactions.valueDate,
-          account: transactions.account,
-          reference: transactions.reference,
-          groupRef: transactions.groupRef,
-          status: transactions.status,
-          metadata: transactions.metadata,
-        })
-        .from(transactions)
-        .where(
-          and(
-            eq(transactions.source, adapter.source),
-            eq(transactions.isCurrent, true),
-            inArray(transactions.sourceId, [...new Set(pending.map((r) => r.sourceId))]),
-          ),
-        );
-      for (const c of currents) {
-        currentByKey.set(`${c.sourceAccount} ${c.sourceId}`, c);
-      }
-    }
+    const currents =
+      pending.length > 0
+        ? await tx
+            .select({ id: transactions.id, version: transactions.version, ...canonicalColumns })
+            .from(transactions)
+            .where(
+              and(
+                eq(transactions.source, adapter.source),
+                eq(transactions.isCurrent, true),
+                inArray(transactions.sourceId, [...new Set(pending.map((r) => r.sourceId))]),
+              ),
+            )
+        : [];
+    const currentByKey = new Map(currents.map((c) => [identityKey(c.sourceAccount, c.sourceId), c]));
 
     const txnRows: (typeof transactions.$inferInsert)[] = [];
     const quarantineRows: (typeof quarantinedRecords.$inferInsert)[] = [];
@@ -256,7 +218,7 @@ export async function normalizeBatch(
         // carries the predecessor's canonical fields forward and marks the end of
         // the line; an identity that never reached canonical space (all versions
         // quarantined) has nothing to tombstone — the quarantine rows are its story.
-        const key = `${raw.sourceAccount} ${raw.sourceId}`;
+        const key = identityKey(raw.sourceAccount, raw.sourceId);
         const current = currentByKey.get(key);
         if (current === undefined) continue;
         supersededIds.push(current.id);
@@ -323,7 +285,7 @@ export async function normalizeBatch(
         continue;
       }
 
-      const key = `${raw.sourceAccount} ${raw.sourceId}`;
+      const key = identityKey(raw.sourceAccount, raw.sourceId);
       const current = currentByKey.get(key);
       const builtIdx = lastBuiltByKey.get(key);
       if (builtIdx !== undefined) {
@@ -376,7 +338,7 @@ export async function normalizeBatch(
       lastBuiltByKey.set(key, txnRows.length - 1);
     }
 
-    if (pending.length > 0 && quarantineRows.length / pending.length > maxQuarantineRate) {
+    if (pending.length > 0 && quarantineRows.length / pending.length > MAX_QUARANTINE_RATE) {
       // Circuit breaker (D14): a batch failing this hard means the feed drifted —
       // the parseable remainder is collateral, quarantined with an explicit reason
       // so nothing lingers half-processed and the halt survives retries.
