@@ -11,8 +11,8 @@ export interface SeedLedgerEntry {
   bookedAt: string;
   /** YYYY-MM-DD. */
   valueDate: string;
-  type: "payment" | "refund" | "fee" | "payout" | "adjustment";
-  status: "posted" | "pending" | "void";
+  type: "payment" | "refund" | "payout";
+  status: "posted";
   /** PSP object id the booking refers to (ch_…, re_…), or null for manual journals. */
   reference: string | null;
   description: string;
@@ -34,8 +34,8 @@ export interface SeedStripeBalanceTransaction {
   net: number;
   reporting_category: string;
   source: string | null;
-  status: "available" | "pending";
-  type: "charge" | "refund" | "stripe_fee" | "payout" | "adjustment";
+  status: "available";
+  type: "charge" | "refund" | "stripe_fee" | "payout";
 }
 
 /** A break the dataset deliberately plants. Acceptance: recon finds exactly these. */
@@ -95,7 +95,8 @@ export interface SeedManifest {
 export interface MercadiaDataset {
   ledgerEntries: SeedLedgerEntry[];
   stripeBalanceTransactions: SeedStripeBalanceTransaction[];
-  /** Day-files in landing order — the restated 05-25 file follows its original. */
+  /** Day-files; per unit the restated 05-25 file follows its original (landing
+   *  order on disk is lexicographic, which preserves that). */
   pagolatFiles: SeedPagolatFile[];
   /** The run's recorded rates (D7), upserted into fx_rates by the pipeline. */
   fxRates: FxRateInput[];

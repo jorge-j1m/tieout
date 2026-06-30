@@ -65,7 +65,8 @@ const PL_DAYS: Readonly<
 > = {
   // Clean: grouped match, 3 lines.
   "2026-05-21": { sales: [[100_000, 2_500], [150_000, 5_000], [50_000, 2_500]] },
-  // A platform fee the booking ignored: unexpected_fee consuming the group.
+  // A platform fee the booking ignored (the booking covers sales nets only):
+  // unexpected_fee consuming the group.
   "2026-05-22": { sales: [[250_000, 7_500], [100_000, 2_500]], surpriseFeeMinor: -25_000 },
   // Booked at the wrong internal rate: fx_drift.
   "2026-05-23": { sales: [[150_000, 5_000], [100_000, 2_500]] },
@@ -125,21 +126,22 @@ export function generateMercadiaDataset(): MercadiaDataset {
   const ledgerEntries: SeedLedgerEntry[] = [];
   const stripeBalanceTransactions: SeedStripeBalanceTransaction[] = [];
 
-  for (let i = 0; i < ORDER_COUNT; i++) {
-    const orderNo = pad(i + 1);
-    const amountMinor = orderAmountMinor(i);
-    const chargeId = `ch_mercadia_${orderNo}`;
-    const chargeMs = chargeTimeMs(i);
+  const pushStripeCharge = (
+    txnId: string,
+    chargeId: string,
+    orderNo: number,
+    amountMinor: number,
+    createdMs: number,
+  ) => {
     const fee = Math.floor((amountMinor * 29) / 1000) + 30;
-
     stripeBalanceTransactions.push({
-      id: `txn_ch_${orderNo}`,
+      id: txnId,
       object: "balance_transaction",
       amount: amountMinor,
       currency: "usd",
-      created: chargeMs / 1000,
-      available_on: availableOnSec(chargeMs),
-      description: `Charge for order #${1000 + i}`,
+      created: createdMs / 1000,
+      available_on: availableOnSec(createdMs),
+      description: `Charge for order #${orderNo}`,
       fee,
       fee_details: [{ amount: fee, currency: "usd", type: "stripe_fee" }],
       net: amountMinor - fee,
@@ -148,6 +150,15 @@ export function generateMercadiaDataset(): MercadiaDataset {
       status: "available",
       type: "charge",
     });
+  };
+
+  for (let i = 0; i < ORDER_COUNT; i++) {
+    const orderNo = pad(i + 1);
+    const amountMinor = orderAmountMinor(i);
+    const chargeId = `ch_mercadia_${orderNo}`;
+    const chargeMs = chargeTimeMs(i);
+
+    pushStripeCharge(`txn_ch_${orderNo}`, chargeId, 1000 + i, amountMinor, chargeMs);
 
     const bookedMs = chargeMs + (((i * 11) % 50) + 5) * 60_000;
     ledgerEntries.push(
@@ -248,25 +259,7 @@ export function generateMercadiaDataset(): MercadiaDataset {
     orderNo: number,
     amountMinor: number,
     createdMs: number,
-  ) => {
-    const fee = Math.floor((amountMinor * 29) / 1000) + 30;
-    stripeBalanceTransactions.push({
-      id: `txn_cl_${suffix}`,
-      object: "balance_transaction",
-      amount: amountMinor,
-      currency: "usd",
-      created: createdMs / 1000,
-      available_on: availableOnSec(createdMs),
-      description: `Charge for order #${orderNo}`,
-      fee,
-      fee_details: [{ amount: fee, currency: "usd", type: "stripe_fee" }],
-      net: amountMinor - fee,
-      reporting_category: "charge",
-      source: `ch_mercadia_cl_${suffix}`,
-      status: "available",
-      type: "charge",
-    });
-  };
+  ) => pushStripeCharge(`txn_cl_${suffix}`, `ch_mercadia_cl_${suffix}`, orderNo, amountMinor, createdMs);
   const clusterLedgerEntry = (
     suffix: string,
     amountMinor: number,
@@ -372,10 +365,11 @@ export function generateMercadiaDataset(): MercadiaDataset {
 
   // ── PagoLat settlement story ──────────────────────────────────────────────
   const pagolatFiles: SeedPagolatFile[] = [];
+  // Format mirrors pagolatSettlementKey in @tieout/adapters — the matcher meets in the middle.
   const settlementKey = (date: string) => `PL-${PL_ACCOUNT}-${date}`;
 
   const saleLine = (date: string, i: number, gross: number, commission: number) =>
-    `LINE;${date} 1${i}:00:00;sale;plord_${date.replaceAll("-", "")}_${i + 1};${mxn(gross)};${mxn(commission)};${mxn(gross - commission)};Venta tienda MX`;
+    `LINE;${date} ${10 + i}:00:00;sale;plord_${date.replaceAll("-", "")}_${i + 1};${mxn(gross)};${mxn(commission)};${mxn(gross - commission)};Venta tienda MX`;
 
   const buildFile = (
     date: string,
@@ -438,10 +432,7 @@ export function generateMercadiaDataset(): MercadiaDataset {
     }
 
     pagolatFiles.push({ fileName: `pagolat-${date}.csv`, content: buildFile(date, lines) });
-    if (date === "2026-05-22") {
-      // The booking ignores the surprise platform fee — unexpected_fee, precisely.
-      bookSettlement(date, toUsdMinor(BigInt(salesNet)));
-    } else if (date === "2026-05-23") {
+    if (date === "2026-05-23") {
       // Booked at the wrong internal rate — fx_drift, the rate is the suspect.
       bookSettlement(
         date,

@@ -74,14 +74,17 @@ describe("Mercadia dataset", () => {
     expect(expected.matchedTransactions + expected.breakConsumedTransactions).toBe(matchable);
   });
 
-  it("pagolat day-files parse losslessly and the restated file follows its original", () => {
+  it("pagolat day-files are well-formed and the restated file follows its original", () => {
     const { pagolatFiles } = generateMercadiaDataset();
-    expect(pagolatFiles.map((f) => f.fileName).sort()).toEqual(
-      pagolatFiles.map((f) => f.fileName).slice().sort(),
-    );
+    // Landing order is lexicographic on disk (seedPagolatFilePaths sorts), so the
+    // restatement must sort after its original — in generation order AND sorted order.
     const names = pagolatFiles.map((f) => f.fileName);
     expect(names.indexOf("pagolat-2026-05-25.csv")).toBeLessThan(
       names.indexOf("pagolat-2026-05-25.restated.csv"),
+    );
+    const sorted = [...names].sort();
+    expect(sorted.indexOf("pagolat-2026-05-25.csv")).toBeLessThan(
+      sorted.indexOf("pagolat-2026-05-25.restated.csv"),
     );
     for (const file of pagolatFiles) {
       expect(file.content).toMatch(/^PAGOLAT;SETTLEMENT;v1;/);
