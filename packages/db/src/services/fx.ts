@@ -1,4 +1,4 @@
-import { asc, lte } from "drizzle-orm";
+import { asc, desc, lte } from "drizzle-orm";
 import type { FxRateInput } from "@tieout/contracts";
 import type { Db } from "../client.js";
 import { fxRates } from "../schema.js";
@@ -33,20 +33,20 @@ export async function upsertFxRates(db: Db, rates: FxRateInput[]): Promise<void>
  */
 export async function loadFxRatesAsOf(db: Db, asOf: Date): Promise<FxRateInput[]> {
   const asOfDate = asOf.toISOString().slice(0, 10);
-  const rows = await db
-    .select()
+  return db
+    .selectDistinctOn([fxRates.base, fxRates.quote], {
+      base: fxRates.base,
+      quote: fxRates.quote,
+      rate: fxRates.rate,
+      rateSource: fxRates.rateSource,
+      rateDate: fxRates.rateDate,
+    })
     .from(fxRates)
     .where(lte(fxRates.rateDate, asOfDate))
-    .orderBy(asc(fxRates.rateDate), asc(fxRates.rateSource));
-  const byPair = new Map<string, FxRateInput>();
-  for (const row of rows) {
-    byPair.set(`${row.base}:${row.quote}`, {
-      base: row.base,
-      quote: row.quote,
-      rate: row.rate,
-      rateSource: row.rateSource,
-      rateDate: row.rateDate,
-    });
-  }
-  return [...byPair.values()];
+    .orderBy(
+      asc(fxRates.base),
+      asc(fxRates.quote),
+      desc(fxRates.rateDate),
+      desc(fxRates.rateSource),
+    );
 }

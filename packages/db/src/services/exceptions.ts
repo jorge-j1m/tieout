@@ -49,79 +49,126 @@ export async function syncExceptionsForRun(
       : [];
     const known = new Map(existing.map((e) => [e.fingerprint, e]));
 
-    const result: ExceptionSyncResult = { opened: 0, recurred: 0, reopened: 0, selfResolved: 0 };
+    const sorted = [...byFingerprint.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    const toOpen = sorted.filter(([fingerprint]) => !known.has(fingerprint));
+    const seen = sorted
+      .map(([fingerprint]) => known.get(fingerprint))
+      .filter((e): e is NonNullable<typeof e> => e !== undefined)
+      .filter((e) => e.lastSeenRunId !== runId); // already-synced rows are this run's retries
+    const toReopen = seen.filter((e) => e.status === "resolved");
+    const toRecur = seen.filter((e) => e.status !== "resolved");
 
-    for (const [fingerprint, brk] of [...byFingerprint.entries()].sort(([a], [b]) =>
-      a < b ? -1 : a > b ? 1 : 0,
-    )) {
-      const current = known.get(fingerprint);
-      if (current === undefined) {
-        const [created] = await tx
-          .insert(exceptions)
-          .values({
-            fingerprint,
-            type: brk.type,
-            status: "open",
-            firstSeenRunId: runId,
-            lastSeenRunId: runId,
-            currentBreakId: brk.id,
-            updatedAt: now,
-          })
-          .returning({ id: exceptions.id });
-        await tx.insert(exceptionEvents).values({
-          exceptionId: created!.id,
-          kind: "opened",
-          actor: "system",
-          runId,
-        });
-        result.opened += 1;
-        continue;
-      }
-      if (current.lastSeenRunId === runId) continue; // already synced for this run
-      if (current.status === "resolved") {
-        await tx
-          .update(exceptions)
-          .set({ status: "open", lastSeenRunId: runId, currentBreakId: brk.id, updatedAt: now })
-          .where(eq(exceptions.id, current.id));
-        await tx.insert(exceptionEvents).values({
-          exceptionId: current.id,
-          kind: "reopened",
-          actor: "system",
-          runId,
-        });
-        result.reopened += 1;
-      } else {
-        await tx
-          .update(exceptions)
-          .set({ lastSeenRunId: runId, currentBreakId: brk.id, updatedAt: now })
-          .where(eq(exceptions.id, current.id));
-        result.recurred += 1;
-      }
+    if (toOpen.length > 0) {
+      const created = await tx
+        .insert(exceptions)
+        .values(
+          toOpen.map(
+            ([fingerprint, brk]): typeof exceptions.$inferInsert => ({
+              fingerprint,
+              type: brk.type,
+              status: "open",
+              firstSeenRunId: runId,
+              lastSeenRunId: runId,
+              currentBreakId: brk.id,
+              updatedAt: now,
+            }),
+          ),
+        )
+        .returning({ id: exceptions.id });
+      await tx.insert(exceptionEvents).values(
+        created.map(
+          (c): typeof exceptionEvents.$inferInsert => ({
+            exceptionId: c.id,
+            kind: "opened",
+            actor: "system",
+            runId,
+          }),
+        ),
+      );
+    }
+
+    // Recurring and reopening rows re-point at this run's break for their fingerprint.
+    if (toRecur.length > 0) {
+      await tx
+        .update(exceptions)
+        .set({ lastSeenRunId: runId, currentBreakId: breaks.id, updatedAt: now })
+        .from(breaks)
+        .where(
+          and(
+            inArray(
+              exceptions.id,
+              toRecur.map((e) => e.id),
+            ),
+            eq(breaks.runId, runId),
+            eq(breaks.fingerprint, exceptions.fingerprint),
+          ),
+        );
+    }
+
+    if (toReopen.length > 0) {
+      await tx
+        .update(exceptions)
+        .set({ status: "open", lastSeenRunId: runId, currentBreakId: breaks.id, updatedAt: now })
+        .from(breaks)
+        .where(
+          and(
+            inArray(
+              exceptions.id,
+              toReopen.map((e) => e.id),
+            ),
+            eq(breaks.runId, runId),
+            eq(breaks.fingerprint, exceptions.fingerprint),
+          ),
+        );
+      await tx.insert(exceptionEvents).values(
+        toReopen.map(
+          (e): typeof exceptionEvents.$inferInsert => ({
+            exceptionId: e.id,
+            kind: "reopened",
+            actor: "system",
+            runId,
+          }),
+        ),
+      );
     }
 
     // Open work whose break vanished from this run: the real systems were fixed.
+    // Everything synced above already carries this run's id, so it is excluded here.
     const stillOpen = await tx
       .select({ id: exceptions.id, fingerprint: exceptions.fingerprint })
       .from(exceptions)
       .where(and(ne(exceptions.status, "resolved"), ne(exceptions.lastSeenRunId, runId)));
-    for (const gone of stillOpen.sort((a, b) =>
+    const gone = stillOpen.sort((a, b) =>
       a.fingerprint < b.fingerprint ? -1 : a.fingerprint > b.fingerprint ? 1 : 0,
-    )) {
-      if (byFingerprint.has(gone.fingerprint)) continue;
+    );
+    if (gone.length > 0) {
       await tx
         .update(exceptions)
         .set({ status: "resolved", updatedAt: now })
-        .where(eq(exceptions.id, gone.id));
-      await tx.insert(exceptionEvents).values({
-        exceptionId: gone.id,
-        kind: "self_resolved",
-        actor: "system",
-        runId,
-      });
-      result.selfResolved += 1;
+        .where(
+          inArray(
+            exceptions.id,
+            gone.map((g) => g.id),
+          ),
+        );
+      await tx.insert(exceptionEvents).values(
+        gone.map(
+          (g): typeof exceptionEvents.$inferInsert => ({
+            exceptionId: g.id,
+            kind: "self_resolved",
+            actor: "system",
+            runId,
+          }),
+        ),
+      );
     }
 
-    return result;
+    return {
+      opened: toOpen.length,
+      recurred: toRecur.length,
+      reopened: toReopen.length,
+      selfResolved: gone.length,
+    };
   });
 }
 
@@ -133,7 +180,7 @@ export async function acknowledgeException(
   now: Date,
   note?: string,
 ): Promise<void> {
-  await transition(db, exceptionId, ["open"], "acknowledged", "acknowledged", actor, now, note);
+  await transition(db, exceptionId, ["open"], "acknowledged", actor, now, note);
 }
 
 /** A human closes the case — with a reason; an unexplained resolution is no resolution. */
@@ -144,24 +191,14 @@ export async function resolveException(
   note: string,
   now: Date,
 ): Promise<void> {
-  await transition(
-    db,
-    exceptionId,
-    ["open", "acknowledged"],
-    "resolved",
-    "resolved",
-    actor,
-    now,
-    note,
-  );
+  await transition(db, exceptionId, ["open", "acknowledged"], "resolved", actor, now, note);
 }
 
 async function transition(
   db: Db,
   exceptionId: string,
-  from: ("open" | "acknowledged" | "resolved")[],
+  from: ("open" | "acknowledged")[],
   to: "acknowledged" | "resolved",
-  eventKind: "acknowledged" | "resolved",
   actor: string,
   now: Date,
   note?: string,
@@ -179,7 +216,7 @@ async function transition(
     }
     await tx.insert(exceptionEvents).values({
       exceptionId,
-      kind: eventKind,
+      kind: to,
       actor,
       note: note ?? null,
     });
