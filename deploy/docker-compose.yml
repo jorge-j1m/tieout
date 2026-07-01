@@ -1,0 +1,90 @@
+# The app stack (topology §Stage 3): its own project, network, and Postgres —
+# separate from the dev compose at the repo root, so the demo can be rebuilt
+# without touching a dev database. Public exposure is cloudflared only
+# (outbound tunnel, no router ports); the api binds to localhost for the box.
+#
+#   docker compose up -d                     # postgres → migrate gate → api
+#   docker compose --profile public up -d    # + the Cloudflare tunnel
+name: tieout-app
+
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tieout}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in deploy/.env}
+      POSTGRES_DB: ${POSTGRES_DB:-tieout}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set in deploy/.env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set in deploy/.env}
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # One-shot migrate gate: the api starts only after migrations applied cleanly.
+  migrate:
+    image: ${TIEOUT_IMAGE:-tieout-app}
+    build:
+      context: ..
+    restart: "no"
+    command: ["pnpm", "--filter", "@tieout/db", "run", "migrate"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-tieout}:${POSTGRES_PASSWORD:?set in deploy/.env}@postgres:5432/${POSTGRES_DB:-tieout}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    image: ${TIEOUT_IMAGE:-tieout-app}
+    build:
+      context: ..
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-tieout}:${POSTGRES_PASSWORD:?set in deploy/.env}@postgres:5432/${POSTGRES_DB:-tieout}
+      API_OPERATOR_TOKENS: ${API_OPERATOR_TOKENS:-}
+      API_PORT: "3001"
+    ports:
+      - "127.0.0.1:3001:3001"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # tieout.jorgejim.com → api, via an outbound-only tunnel. Route + rate limiting
+  # are configured on the Cloudflare side; the token names this stack's tunnel.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: ["public"]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      # Required when running --profile public; without the profile it may stay unset.
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  miniodata:

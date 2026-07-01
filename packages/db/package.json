@@ -11,6 +11,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
+    "migrate": "tsx src/cli/migrate.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run"
@@ -20,7 +21,8 @@
     "@tieout/core": "workspace:*",
     "dotenv": "^16.4.0",
     "drizzle-orm": "^0.44.0",
-    "postgres": "^3.4.0"
+    "postgres": "^3.4.0",
+    "tsx": "^4.19.0"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.1",
