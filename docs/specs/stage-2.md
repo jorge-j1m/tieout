@@ -1,8 +1,9 @@
 # Spec: Stage 2 — settlement reality
 
-> **Status: ACTIVE.** Stage 1 is complete (all acceptance boxes verified); this is now
-> the working spec. Collected from the promises made in `decisions.md`,
-> `how-it-works.md`, and the Stage 1 parking lot.
+> **Status: COMPLETE.** All acceptance boxes verified; `stage-3.md` is now the
+> working spec. This document stays as the record of what was built. Collected
+> from the promises made in `decisions.md`, `how-it-works.md`, and the Stage 1
+> parking lot.
 
 **Goal.** Reconcile the messy middle of real payment operations: PSP settlement files
 (restated, control-totaled, locale-formatted, id-less), grouped money movements (one

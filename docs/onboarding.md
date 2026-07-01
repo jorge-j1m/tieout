@@ -91,6 +91,7 @@ parameter). That purity is what makes its property tests trustworthy; don't erod
 | Pipeline: land → normalize → recon glue, ruleset knob defaults (§9) | `apps/jobs/src/pipeline/pipeline.ts` (`MATCH_WINDOW_MS`, `DUPLICATE_WINDOW_MS`, `FX_TOLERANCE_BPS`) | the integration test drives exactly this |
 | Trigger.dev tasks (§9) | `apps/jobs/src/trigger/*.ts` (thin wrappers — keep them thin) | — |
 | `pnpm recon` CLI | `apps/jobs/src/cli/recon.ts` | — |
+| LLM triage: prompt, input hash, pass orchestration (D33) | `packages/triage/src/{triage,pass}.ts`; suggestions stored via `packages/db/src/services/triage.ts` | `triage/src/triage.test.ts` (mocked client) + `pass.test.ts` (cache/cap/retry against the test db) |
 | Stage acceptance, end to end (incl. tombstones, lag, outbox sweep, replay) | `apps/jobs/src/test/integration.test.ts` | itself |
 
 Rule of thumb for *where new logic goes*: if it's a decision (matching, money,

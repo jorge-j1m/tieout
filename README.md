@@ -2,8 +2,6 @@
 
 **Open-source payments reconciliation engine.** Tieout ingests money records from every system they live in — your ledger, payment processors, banks, stablecoin rails — normalizes them into one model, matches them against each other, and surfaces the transactions it can't explain. Every run and every decision is recorded immutably, so "why was this flagged in March?" is a query, not an apology.
 
-> Working title. Rename is a find-and-replace away.
-
 **New here?** [`docs/how-it-works.md`](docs/how-it-works.md) explains the entire engine in plain English — every rule, with worked examples — readable by accountants and engineers alike. Ready to change code? [`docs/onboarding.md`](docs/onboarding.md) maps every concept to the file that implements it.
 
 ## The problem
@@ -19,6 +17,22 @@ Money moves through many systems, and each keeps its own record in its own forma
 5. **Audit** — append-only, versioned storage end to end. Runs are reproducible: the system can show exactly what it knew and decided at any point in time.
 
 Tieout observes and explains; it never moves money.
+
+### LLM-assisted triage (optional)
+
+For each unexplained exception, an LLM suggests a root cause, a plain-English explanation, and one
+concrete next step — shown beside the deterministic result and recorded append-only with the model
+and prompt version that produced it. The answer must be a single JSON object validated against a
+shared Zod schema; anything else degrades to a recorded `unknown`, never a crash.
+**The guardrail (D33): the LLM suggests, never resolves.** Matching stays fully deterministic —
+results are byte-identical with triage disabled — and the public demo serves only precomputed
+suggestions, making zero live LLM calls.
+
+Works with **any OpenAI-compatible provider**: point `TIEOUT_TRIAGE_BASE_URL` at its `/v1` root and
+set `TIEOUT_TRIAGE_API_KEY` + `TIEOUT_TRIAGE_MODEL` (defaults: Anthropic's compat endpoint +
+`claude-opus-4-8`; OpenAI, Ollama, vLLM, OpenRouter all work). Off by default; enable with
+`TIEOUT_TRIAGE_ENABLED=true`, then `pnpm --filter @tieout/jobs triage`. Suggestions are cached per
+break content and each pass has a hard call cap, so spend is bounded.
 
 ## Who it's for
 
@@ -50,11 +64,13 @@ project at [cloud.trigger.dev](https://cloud.trigger.dev), set `TRIGGER_PROJECT_
 
 ```
 apps/jobs           Trigger.dev tasks + recon CLI (thin: orchestrate, retry, fan out)
-apps/web, apps/api  Stage 3 placeholders
+apps/api            Hono domain API: reads over the permanent record + exceptions-only mutations
+apps/web            Stage 3 placeholder (dashboard)
 packages/contracts  Zod schemas + shared types — the boundary everything imports
 packages/core       Pure domain: money (bigint minor units, FX), matching, hashing. Zero I/O.
 packages/db         Drizzle schema + migrations + persistence services. Constraints are correctness features.
 packages/adapters   SourceAdapter implementations (ledger, stripe, pagolat) + golden-file fixtures
+packages/triage     LLM exception triage (any OpenAI-compatible provider) — suggestions, never resolutions
 packages/seed       Deterministic Mercadia dataset with planted breaks and settlement files
 docs/               how-it-works.md · onboarding.md · decisions.md · topology.md · specs/
 ```
@@ -70,8 +86,8 @@ TypeScript end to end. Postgres + Drizzle for the data spine, Trigger.dev for du
 Early development. Staged roadmap:
 
 - **Stage 1 (complete)** — first honest reconciliation: Stripe + internal ledger, 1:1 matching, breaks persisted, seed data, property-tested core. Spec: `docs/specs/stage-1.md`.
-- **Stage 2 (current)** — settlement reality: PSP settlement files, grouped matching (1:N fees, N:1 settlements), tolerances + FX at match time, settlement lag, outbox re-evaluation, headless exceptions. Spec: `docs/specs/stage-2.md`.
-- **Stage 3** — show your work: dashboard, exceptions UI, alerts, auth, self-hosted deployment, public demo. Spec: `docs/specs/stage-3.md`.
+- **Stage 2 (complete)** — settlement reality: PSP settlement files, grouped matching (1:N fees, N:1 settlements), tolerances + FX at match time, settlement lag, outbox re-evaluation, headless exceptions. Spec: `docs/specs/stage-2.md`.
+- **Stage 3 (current)** — show your work: domain API (built), dashboard, exceptions UI, LLM-assisted triage (built), alerts, self-hosted deployment, public demo. Spec: `docs/specs/stage-3.md`.
 - **Stage 4** — k3s migration, bank + stablecoin sources, three-way payout reconciliation.
 
 ## Demo

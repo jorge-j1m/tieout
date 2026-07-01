@@ -1,7 +1,7 @@
 # Spec: Stage 3 — show your work
 
-> **Status: not active.** Stage 2 (`stage-2.md`) is the active spec. This document
-> exists so Stage 2 decisions are made with the destination in view.
+> **Status: ACTIVE.** Stage 2 is complete (`stage-2.md` stays as the record);
+> this is now the working spec.
 
 **Goal.** A stranger opens a public URL and lands — no signup — in a read-only CFO
 persona over synthetic Mercadia data: a nightly run, a handful of breaks, each one
@@ -17,9 +17,11 @@ something a non-engineer can *see*.
    - Reads: runs (list/detail/diff vs. previous), breaks (filter by type/status/run),
      transactions (with full version chain), raw drill-down (break → transaction
      versions → raw payload → batch), exceptions (worklist), quarantine.
-   - Mutations: **exceptions only** (assign, comment, resolve, reopen — the Stage 2
-     service functions, exposed). There is no API path that edits financial rows; the
-     db's append-only constraints stay the last line of defense.
+   - Mutations: **exceptions only** (acknowledge, resolve — the Stage 2 service
+     functions, exposed; reopening is run-driven by design, and assign/comment
+     arrive with the exceptions UI if it needs them). There is no API path that
+     edits financial rows; the db's append-only constraints stay the last line of
+     defense. *(Built: D32 — reads, run diff, raw drill-down, two-persona auth.)*
 2. **`apps/web` (Next.js)** — the dashboard:
    - Overview: latest run status, matched/break counts, trend across runs, quarantine
      and pending (settlement-lag) counts.
@@ -47,6 +49,14 @@ something a non-engineer can *see*.
 7. **Backups, rehearsed (topology §Backups)** — nightly `pg_dump` → MinIO + restic
    offsite, and **one performed, documented restore** before the demo URL goes live.
    An untested backup doesn't count — this is an acceptance item, not a footnote.
+8. **LLM-assisted exception triage (added mid-stage, D33)** — Claude suggests a
+   root-cause classification + plain-English explanation + next action per
+   unresolved exception, via structured outputs; recorded append-only in
+   `triage_suggestions`, cached per break content, hard call cap per pass,
+   disabled by default. Suggestions never touch matching or the exception
+   lifecycle; the public demo serves only precomputed suggestions. *(Built:
+   `packages/triage`, `triage-exceptions` task + `pnpm --filter @tieout/jobs
+   triage` CLI, exposed on `GET /exceptions/:id`.)*
 
 ## Out of scope (resist)
 
@@ -59,7 +69,7 @@ explains, it never edits the books (the product's first promise).
 
 - [ ] A fresh visitor reaches the public URL, lands read-only on Mercadia data, and
       can follow one break from the worklist down to its raw payload without help.
-- [ ] Every mutation endpoint rejects the demo persona — proven by API tests, not UI.
+- [x] Every mutation endpoint rejects the demo persona — proven by API tests, not UI.
 - [ ] An operator logs in, resolves an exception with a reason, and the append-only
       event history shows it; a Stage 2 re-evaluation reopens it visibly.
 - [ ] Run-vs-run diff correctly classifies appeared / self-resolved / reopened breaks

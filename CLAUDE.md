@@ -12,12 +12,13 @@ Tieout: open-source payments reconciliation engine. Ingests transactions from mu
 
 ```
 apps/web        Next.js dashboard (Stage 3 — does not exist yet)
-apps/api        Hono domain API (Stage 3 — does not exist yet)
+apps/api        Hono domain API — reads over the permanent record + exceptions-only mutations
 apps/jobs       Trigger.dev tasks (thin: orchestrate, retry, fan out)
 packages/contracts  Zod schemas + shared types — the boundary everything imports
 packages/core   Pure domain: money, matching, classification. ZERO I/O.
 packages/db     Drizzle schema + migrations. Constraints are correctness features.
 packages/adapters   SourceAdapter implementations + golden-file fixtures
+packages/triage LLM exception triage (D33) — suggestions only, injected client, never blocks the pipeline
 packages/seed   Deterministic Mercadia dataset with planted breaks
 docs/           how-it-works.md (plain-English engine guide) · onboarding.md (codemap +
                 change recipes) · decisions.md · topology.md · specs/
@@ -69,4 +70,4 @@ A change is complete when typecheck, lint, and tests pass AND behavior changes c
 
 ## Current focus
 
-`docs/specs/stage-2.md`. Read it before writing any code. (Stage 1 is complete; its spec stays as the record of what was built.)
+`docs/specs/stage-3.md`. Read it before writing any code. (Stages 1 and 2 are complete; their specs stay as the record of what was built.)

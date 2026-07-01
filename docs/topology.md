@@ -75,6 +75,13 @@ TRIGGER_SECRET_KEY=                 # from Trigger.dev Cloud project
 STRIPE_SECRET_KEY=sk_test_...       # TEST MODE ONLY — the adapter refuses other keys
 STRIPE_LIVE_LANDING=                # =1 makes the hourly land-stripe poll the real test-mode API
 SLACK_WEBHOOK_URL=                  # run summaries / failures
+API_OPERATOR_TOKENS=                # named operator bearer tokens "ana:t1,leo:t2" (D32)
+API_PORT=3001                       # apps/api listen port
+TIEOUT_TRIAGE_ENABLED=              # =true turns on LLM triage (D33); off = zero LLM calls anywhere
+TIEOUT_TRIAGE_API_KEY=              # triage only; never in the app-stack containers
+TIEOUT_TRIAGE_BASE_URL=             # any OpenAI-compatible /v1 root; default is Anthropic's compat endpoint
+TIEOUT_TRIAGE_MODEL=claude-opus-4-8 # triage model on that provider (claude-haiku-4-5 = the cheap option)
+TIEOUT_TRIAGE_MAX_CALLS=25          # hard LLM-call cap per triage pass
 ```
 
 ## Exposure rules (all stages)
@@ -87,10 +94,10 @@ SLACK_WEBHOOK_URL=                  # run summaries / failures
 
 Separate compose projects with separate networks and separate Postgres instances, so the orchestrator can be rebuilt without touching financial data:
 
-1. **App stack** (`tieout`): `caddy` (or direct `cloudflared`) → `web` (Next.js) + `api` (Hono); `postgres`; `minio`; `cloudflared`; a one-shot `migrate` service that gates app start (`depends_on: condition: service_completed_successfully`).
+1. **App stack** (`tieout-app`) — **built, in `deploy/docker-compose.yml`**: `postgres`; `minio`; a one-shot `migrate` service gating app start (`depends_on: condition: service_completed_successfully`); `api` (Hono, localhost-bound, Docker healthcheck on `/healthz`); `cloudflared` under the `public` profile (outbound tunnel → tieout.jorgejim.com). `web` (Next.js) joins when it exists. One image for api and migrate, built from the root `Dockerfile` (prod deps only, api+db workspace slice); runbook in `deploy/README.md`. `TIEOUT_TRIAGE_API_KEY` is deliberately absent from this stack — the demo serves precomputed triage suggestions only (D33).
 2. **Trigger stack** (`trigger`): the official self-host compose — webapp, supervisor, its own Postgres/Redis/ClickHouse, registry — **only if Stage 4 is delayed**; the plan of record is to stay on Trigger.dev Cloud until k3s.
 
-Deploys: GitHub Actions builds images → GHCR → SSH to the box → `docker compose pull && docker compose up -d`.
+Deploys: GitHub Actions builds images → GHCR → SSH to the box → `docker compose pull && docker compose up -d` (until CI exists, `--build` on the box does the same job).
 
 ## Backups
 
