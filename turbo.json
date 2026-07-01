@@ -9,6 +9,13 @@
     "TRIGGER_PROJECT_REF",
     "STRIPE_SECRET_KEY",
     "STRIPE_LIVE_LANDING",
+    "API_OPERATOR_TOKENS",
+    "API_PORT",
+    "TIEOUT_TRIAGE_ENABLED",
+    "TIEOUT_TRIAGE_API_KEY",
+    "TIEOUT_TRIAGE_BASE_URL",
+    "TIEOUT_TRIAGE_MODEL",
+    "TIEOUT_TRIAGE_MAX_CALLS",
     "UPDATE_GOLDEN",
     "CI"
   ],
@@ -24,6 +31,12 @@
     "test": {},
     "@tieout/jobs#test": {
       "dependsOn": ["@tieout/db#test"]
+    },
+    "@tieout/api#test": {
+      "dependsOn": ["@tieout/jobs#test"]
+    },
+    "@tieout/triage#test": {
+      "dependsOn": ["@tieout/api#test"]
     },
     "dev": {
       "cache": false,

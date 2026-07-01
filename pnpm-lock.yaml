@@ -18,7 +18,51 @@ importers:
         specifier: 5.9.2
         version: 5.9.2
 
-  apps/api: {}
+  apps/api:
+    dependencies:
+      '@hono/node-server':
+        specifier: ^1.13.0
+        version: 1.19.14(hono@4.12.25)
+      '@tieout/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@tieout/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      dotenv:
+        specifier: ^16.4.0
+        version: 16.6.1
+      drizzle-orm:
+        specifier: ^0.44.0
+        version: 0.44.7(@electric-sql/pglite@0.5.1)(@opentelemetry/api@1.9.0)(postgres@3.4.9)
+      hono:
+        specifier: ^4.6.0
+        version: 4.12.25
+      tsx:
+        specifier: ^4.19.0
+        version: 4.22.4
+      zod:
+        specifier: ^4.0.0
+        version: 4.4.3
+    devDependencies:
+      '@tieout/eslint-config':
+        specifier: workspace:*
+        version: link:../../packages/eslint-config
+      '@tieout/typescript-config':
+        specifier: workspace:*
+        version: link:../../packages/typescript-config
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.15.3
+      eslint:
+        specifier: ^9.39.1
+        version: 9.39.1(jiti@2.7.0)
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.6(@types/node@22.15.3)(jiti@2.7.0)(tsx@4.22.4)
 
   apps/jobs:
     dependencies:
@@ -37,6 +81,9 @@ importers:
       '@tieout/seed':
         specifier: workspace:*
         version: link:../../packages/seed
+      '@tieout/triage':
+        specifier: workspace:*
+        version: link:../../packages/triage
       '@trigger.dev/sdk':
         specifier: ^4.0.0
         version: 4.4.6(zod@3.25.76)
@@ -243,6 +290,40 @@ importers:
       tsx:
         specifier: ^4.19.0
         version: 4.22.4
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.6(@types/node@22.15.3)(jiti@2.7.0)(tsx@4.22.4)
+
+  packages/triage:
+    dependencies:
+      '@tieout/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@tieout/db':
+        specifier: workspace:*
+        version: link:../db
+      zod:
+        specifier: ^4.0.0
+        version: 4.4.3
+    devDependencies:
+      '@tieout/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@tieout/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.15.3
+      drizzle-orm:
+        specifier: ^0.44.0
+        version: 0.44.7(@electric-sql/pglite@0.5.1)(@opentelemetry/api@1.9.0)(postgres@3.4.9)
+      eslint:
+        specifier: ^9.39.1
+        version: 9.39.1(jiti@2.7.0)
       typescript:
         specifier: 5.9.2
         version: 5.9.2
@@ -3208,6 +3289,7 @@ packages:
   typescript@5.9.2:
     resolution: {integrity: sha512-CWBzXQrc/qOkhidw1OzBTQuYRbfyxDXJMVJ1XNwUHGROVmuaeiEm3OslpZ1RV96d7SKKjZKrSJu3+t/xlw3R9A==}
     engines: {node: '>=14.17'}
+    hasBin: true
 
   ufo@1.6.4:
     resolution: {integrity: sha512-JFNbkD1Svwe0KvGi8GOeLcP4kAWQ609twvCdcHxq1oSL8svv39ZuSvajcD8B+5D0eL4+s1Is2D/O6KN3qcTeRA==}
@@ -5046,7 +5128,7 @@ snapshots:
       '@humanfs/node': 0.16.7
       '@humanwhocodes/module-importer': 1.0.1
       '@humanwhocodes/retry': 0.4.3
-      '@types/estree': 1.0.8
+      '@types/estree': 1.0.9
       ajv: 6.12.6
       chalk: 4.1.2
       cross-spawn: 7.0.6

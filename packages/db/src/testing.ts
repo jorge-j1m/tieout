@@ -1,4 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
+import { sql } from "drizzle-orm";
 import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import { migrate as migratePglite } from "drizzle-orm/pglite/migrator";
 import { migrate as migratePg } from "drizzle-orm/postgres-js/migrator";
@@ -32,7 +33,7 @@ export interface TestDb {
 }
 
 /** TEST_DATABASE_URL wins; otherwise DATABASE_URL with `_test` appended to the database name. */
-export function resolveTestDatabaseUrl(): string | undefined {
+function resolveTestDatabaseUrl(): string | undefined {
   const explicit = process.env.TEST_DATABASE_URL;
   if (explicit) return explicit;
   const base = process.env.DATABASE_URL;
@@ -73,4 +74,14 @@ export async function connectTestDb(): Promise<TestDb> {
   const db = drizzlePglite(pglite, { schema });
   await migratePglite(db, { migrationsFolder });
   return { db, mode: "pglite", close: () => pglite.close() };
+}
+
+/** Reset every table between tests — the test database holds nothing worth keeping. */
+export async function truncateAll(db: Db): Promise<void> {
+  await db.execute(sql`
+    TRUNCATE TABLE triage_suggestions, exception_events, exceptions, outbox, fx_rates,
+      match_members, matches, breaks, recon_runs,
+      quarantined_records, transactions, raw_records, ingestion_batches, source_cursors
+    CASCADE
+  `);
 }

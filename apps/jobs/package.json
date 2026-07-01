@@ -7,6 +7,7 @@
     "dev": "trigger.dev dev",
     "deploy": "trigger.dev deploy",
     "recon": "tsx src/cli/recon.ts",
+    "triage": "tsx src/cli/triage.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run"
@@ -17,6 +18,7 @@
     "@tieout/core": "workspace:*",
     "@tieout/db": "workspace:*",
     "@tieout/seed": "workspace:*",
+    "@tieout/triage": "workspace:*",
     "@trigger.dev/sdk": "^4.0.0",
     "dotenv": "^16.4.0",
     "drizzle-orm": "^0.44.0"

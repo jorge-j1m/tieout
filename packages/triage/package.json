@@ -1,29 +1,26 @@
 {
-  "name": "@tieout/api",
+  "name": "@tieout/triage",
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run"
   },
   "dependencies": {
-    "@hono/node-server": "^1.13.0",
     "@tieout/contracts": "workspace:*",
     "@tieout/db": "workspace:*",
-    "dotenv": "^16.4.0",
-    "drizzle-orm": "^0.44.0",
-    "hono": "^4.6.0",
-    "tsx": "^4.19.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@tieout/eslint-config": "workspace:*",
     "@tieout/typescript-config": "workspace:*",
     "@types/node": "^22.0.0",
+    "drizzle-orm": "^0.44.0",
     "eslint": "^9.39.1",
     "typescript": "5.9.2",
     "vitest": "^3.0.0"

@@ -26,6 +26,8 @@ import {
   OUTBOX_TOPICS,
   QUARANTINE_STAGES,
   RUN_STATUSES,
+  TRIAGE_CLASSIFICATIONS,
+  TRIAGE_CONFIDENCES,
   TXN_STATUSES,
 } from "@tieout/contracts";
 
@@ -47,6 +49,8 @@ export const quarantineStage = pgEnum("quarantine_stage", QUARANTINE_STAGES);
 export const exceptionStatus = pgEnum("exception_status", EXCEPTION_STATUSES);
 export const exceptionEventKind = pgEnum("exception_event_kind", EXCEPTION_EVENT_KINDS);
 export const outboxTopic = pgEnum("outbox_topic", OUTBOX_TOPICS);
+export const triageClassification = pgEnum("triage_classification", TRIAGE_CLASSIFICATIONS);
+export const triageConfidence = pgEnum("triage_confidence", TRIAGE_CONFIDENCES);
 
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 
@@ -367,4 +371,37 @@ export const fxRates = pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (t) => [uniqueIndex("fx_rates_pair_date_source_uq").on(t.base, t.quote, t.rateDate, t.rateSource)],
+);
+
+/**
+ * LLM triage suggestions (D33): append-only annotations on exceptions — never
+ * UPDATEd, never DELETEd, never part of the reconciliation outcome. Each row
+ * records what was suggested, by which model, from which break content.
+ * `input_hash` (fingerprint + break details + model + prompt version) is the
+ * cache key: the same unchanged break is never triaged twice.
+ */
+export const triageSuggestions = pgTable(
+  "triage_suggestions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    exceptionId: uuid("exception_id")
+      .notNull()
+      .references(() => exceptions.id),
+    /** The break row whose details the suggestion was computed from. */
+    breakId: uuid("break_id")
+      .notNull()
+      .references(() => breaks.id),
+    inputHash: text("input_hash").notNull(),
+    model: text("model").notNull(),
+    promptVersion: text("prompt_version").notNull(),
+    classification: triageClassification("classification").notNull(),
+    confidence: triageConfidence("confidence").notNull(),
+    explanation: text("explanation").notNull(),
+    suggestedAction: text("suggested_action").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("triage_suggestions_input_hash_uq").on(t.inputHash),
+    index("triage_suggestions_exception_idx").on(t.exceptionId, t.createdAt),
+  ],
 );

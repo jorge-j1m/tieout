@@ -22,6 +22,13 @@
       "when": 1781109654409,
       "tag": "0002_large_greymalkin",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1782991409768,
+      "tag": "0003_first_star_brand",
+      "breakpoints": true
     }
   ]
 }

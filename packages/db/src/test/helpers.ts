@@ -1,17 +1,7 @@
-import { sql } from "drizzle-orm";
 import type { Db } from "../client.js";
 import { ingestionBatches, rawRecords } from "../schema.js";
 
-export { connectTestDb, type TestDb } from "../testing.js";
-
-export async function truncateAll(db: Db): Promise<void> {
-  await db.execute(sql`
-    TRUNCATE TABLE exception_events, exceptions, outbox, fx_rates,
-      match_members, matches, breaks, recon_runs,
-      quarantined_records, transactions, raw_records, ingestion_batches, source_cursors
-    CASCADE
-  `);
-}
+export { connectTestDb, truncateAll, type TestDb } from "../testing.js";
 
 /** Minimal batch + raw row so FK-bearing fixtures can exist. Returns the raw record id. */
 export async function insertFixtureRaw(

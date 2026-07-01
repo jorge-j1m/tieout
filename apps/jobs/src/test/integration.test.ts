@@ -1,6 +1,6 @@
 import "../env.js";
 import { readFileSync } from "node:fs";
-import { eq, sql as dsql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { BreakTxnDetail } from "@tieout/core";
 import { LEDGER_SOURCE } from "@tieout/adapters";
@@ -15,7 +15,7 @@ import {
   rawRecords,
   transactions,
 } from "@tieout/db";
-import { connectTestDb, type TestDb } from "@tieout/db/testing";
+import { connectTestDb, truncateAll, type TestDb } from "@tieout/db/testing";
 import { loadSeedFxRates, loadSeedManifest, seedFiles, type SeedLedgerEntry } from "@tieout/seed";
 import { createSeedAdapters } from "../pipeline/adapters.js";
 import { fullRecon, runRecon, type FullReconResult } from "../pipeline/pipeline.js";
@@ -54,19 +54,14 @@ async function runFingerprint(client: TestDb, runId: string) {
   return { matchSigs, breakSigs };
 }
 
-describe("Stage 1 acceptance: full pipeline over the seed dataset", () => {
+describe("Pipeline acceptance (Stages 1–2): full pipeline over the seed dataset", () => {
   let client: TestDb;
   let first: FullReconResult;
   let second: FullReconResult;
 
   beforeAll(async () => {
     client = await connectTestDb();
-    await client.db.execute(dsql`
-      TRUNCATE TABLE exception_events, exceptions, outbox, fx_rates,
-        match_members, matches, breaks, recon_runs,
-        quarantined_records, transactions, raw_records, ingestion_batches, source_cursors
-      CASCADE
-    `);
+    await truncateAll(client.db);
     first = await fullRecon(client.db, createSeedAdapters(), {
       now: new Date("2026-06-05T00:00:00Z"),
       fxRates: loadSeedFxRates(),
