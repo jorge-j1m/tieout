@@ -50,11 +50,6 @@ export function declaredFooter(payload: unknown): DeclaredFooter | null {
   return footer.lineCount !== null || footer.totalNet !== null ? footer : null;
 }
 
-/** Whether the whole batch was held (vs. a single line dropped in normalization). */
-export function isWholeBatch(row: Pick<QuarantineRow, "stage">): boolean {
-  return row.stage === "batch";
-}
-
 /** A friendly identity for a held record: the file name, else the source line id. */
 export function quarantineTitle(row: Pick<QuarantineRow, "batchRef" | "sourceId" | "source">): string {
   return row.batchRef ?? row.sourceId ?? row.source;

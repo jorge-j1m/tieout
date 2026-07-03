@@ -1,3 +1,4 @@
+import type { ExceptionStatus } from "@tieout/contracts";
 import { cx } from "@/lib/cx";
 
 /**
@@ -5,6 +6,17 @@ import { cx } from "@/lib/cx";
  * always text — color is never the only signal (brief: accessibility bar).
  */
 export type ChipTone = "break" | "matched" | "pending" | "muted";
+
+/**
+ * The tone a case's workflow status wears, defined once for every surface that
+ * shows one (worklists, the case view, the break rail). Reopened reads as
+ * urgent as open — the world disagreed again.
+ */
+export function statusTone(status: ExceptionStatus | "reopened"): ChipTone {
+  if (status === "resolved") return "matched";
+  if (status === "acknowledged") return "pending";
+  return "break"; // open or reopened
+}
 
 const TONE_CLASS: Record<ChipTone, string> = {
   break: "text-break",

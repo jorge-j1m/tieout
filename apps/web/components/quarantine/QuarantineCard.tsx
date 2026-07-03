@@ -4,7 +4,7 @@ import { SectionLabel } from "@/components/primitives/SectionLabel";
 import { StateChip } from "@/components/primitives/StateChip";
 import { UtcTime } from "@/components/primitives/UtcTime";
 import { sourceLabel } from "@/lib/explain/labels";
-import { declaredFooter, isWholeBatch, quarantineReasons, quarantineTitle } from "@/lib/quarantine";
+import { declaredFooter, quarantineReasons, quarantineTitle } from "@/lib/quarantine";
 
 /** The settlement currency of the source whose footer we're showing, when known. */
 const SOURCE_CURRENCY: Record<string, string> = { pagolat: "MXN" };
@@ -41,7 +41,7 @@ export function QuarantineCard({ row }: { row: QuarantineRow }) {
   return (
     <article>
       <div className="border-b border-hair pb-6">
-        <StateChip tone="pending" label={isWholeBatch(row) ? "held whole" : "line held"} />
+        <StateChip tone="pending" label={row.stage === "batch" ? "held whole" : "line held"} />
         <div className="mt-3.5 font-mono text-[clamp(18px,2.4vw,22px)] text-ink">
           {quarantineTitle(row)}
         </div>

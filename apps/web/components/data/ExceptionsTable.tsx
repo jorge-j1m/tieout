@@ -1,19 +1,12 @@
 import Link from "next/link";
 import type { ExceptionRow } from "@tieout/contracts";
 import { Money } from "@/components/primitives/Money";
-import { StateChip, type ChipTone } from "@/components/primitives/StateChip";
+import { StateChip, statusTone } from "@/components/primitives/StateChip";
 import { cx } from "@/lib/cx";
 import { TYPE_LABEL } from "@/lib/explain/labels";
 import { shortId } from "@/lib/ids";
 import { exceptionHref } from "@/lib/routes";
 import { age } from "@/lib/time";
-
-/** A case wears its status color; reopened reads as urgent as open. */
-export function statusTone(row: Pick<ExceptionRow, "status" | "reopened">): ChipTone {
-  if (row.status === "resolved") return "matched";
-  if (row.status === "acknowledged") return "pending";
-  return "break"; // open or reopened
-}
 
 const HEAD = "text-[11px] uppercase tracking-[0.06em] text-muted";
 
@@ -40,7 +33,7 @@ export function ExceptionsTable({ rows, now }: { rows: ExceptionRow[]; now: stri
           className="flex flex-col gap-2 border-b border-hair px-1.5 py-3.5 no-underline hover:bg-wash sm:flex-row sm:items-center sm:gap-4"
         >
           <span className="basis-40">
-            <StateChip tone={statusTone(row)} label={TYPE_LABEL[row.type]} />
+            <StateChip tone={statusTone(row.reopened ? "reopened" : row.status)} label={TYPE_LABEL[row.type]} />
           </span>
           <span className="flex-1 font-mono text-[13px] text-ink">
             {row.subjectId ?? shortId(row.fingerprint)}

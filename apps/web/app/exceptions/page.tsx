@@ -1,5 +1,6 @@
 import type { ExceptionRow } from "@tieout/contracts";
 import { RunContextLine } from "@/components/chrome/RunContextLine";
+import { CapNote } from "@/components/data/CapNote";
 import { ExceptionsTable } from "@/components/data/ExceptionsTable";
 import {
   asExceptionTab,
@@ -7,9 +8,9 @@ import {
   ExceptionTabs,
   type ExceptionTab,
 } from "@/components/data/ExceptionTabs";
-import { DoubleRule } from "@/components/primitives/DoubleRule";
 import { SectionLabel } from "@/components/primitives/SectionLabel";
 import { Shell } from "@/components/primitives/Shell";
+import { EmptyTiedOut } from "@/components/states/EmptyTiedOut";
 import { getExceptions, getRuns } from "@/lib/api/endpoints";
 
 export const metadata = { title: "Exceptions" };
@@ -21,11 +22,12 @@ function tabOf(e: ExceptionRow): ExceptionTab {
   return e.reopened ? "reopened" : "open";
 }
 
-const EMPTY: Record<ExceptionTab, { message: string; tied: boolean }> = {
-  open: { message: "Nothing open.", tied: true },
-  acknowledged: { message: "Nothing acknowledged right now.", tied: false },
-  resolved: { message: "Nothing resolved yet.", tied: false },
-  reopened: { message: "Nothing reopened. Everything that was fixed has stayed fixed.", tied: true },
+/** Empty copy per tab; the double rule marks only the brand moments. */
+const EMPTY: Record<ExceptionTab, { message: string; rule: boolean }> = {
+  open: { message: "Nothing open.", rule: true },
+  acknowledged: { message: "Nothing acknowledged right now.", rule: false },
+  resolved: { message: "Nothing resolved yet.", rule: false },
+  reopened: { message: "Nothing reopened. Everything that was fixed has stayed fixed.", rule: true },
 };
 
 /** The operator's queue: every case a run surfaced, grouped by where it stands. */
@@ -73,11 +75,9 @@ export default async function ExceptionsPage({
           {rows.length > 0 ? (
             <ExceptionsTable rows={rows} now={now} />
           ) : (
-            <div className="flex flex-col items-center py-20 text-center">
-              <p className="text-lg text-ink">{empty.message}</p>
-              {empty.tied && <DoubleRule className="mt-3 w-24" />}
-            </div>
+            <EmptyTiedOut rule={empty.rule}>{empty.message}</EmptyTiedOut>
           )}
+          <CapNote count={exceptions.length} cap={200} noun="cases" />
         </div>
       </Shell>
     </>

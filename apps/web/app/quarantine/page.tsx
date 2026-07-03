@@ -1,8 +1,8 @@
 import { RunContextLine } from "@/components/chrome/RunContextLine";
 import { QuarantineCard } from "@/components/quarantine/QuarantineCard";
-import { DoubleRule } from "@/components/primitives/DoubleRule";
 import { SectionLabel } from "@/components/primitives/SectionLabel";
 import { Shell } from "@/components/primitives/Shell";
+import { EmptyTiedOut } from "@/components/states/EmptyTiedOut";
 import { getQuarantine, getRuns } from "@/lib/api/endpoints";
 
 export const metadata = { title: "Quarantine" };
@@ -32,10 +32,7 @@ export default async function QuarantinePage() {
             ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center py-20 text-center">
-            <p className="text-lg text-ink">Nothing is held. Every record tied to its source.</p>
-            <DoubleRule className="mt-3 w-24" />
-          </div>
+          <EmptyTiedOut>Nothing is held. Every record tied to its source.</EmptyTiedOut>
         )}
       </Shell>
     </>

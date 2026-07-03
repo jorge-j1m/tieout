@@ -1,3 +1,4 @@
+import { CapNote } from "@/components/data/CapNote";
 import { RunsTable } from "@/components/data/RunsTable";
 import { SectionLabel } from "@/components/primitives/SectionLabel";
 import { Shell } from "@/components/primitives/Shell";
@@ -23,6 +24,7 @@ export default async function RunsPage() {
       ) : (
         <p className="text-sm text-muted">No reconciliation runs yet.</p>
       )}
+      <CapNote count={runs.length} cap={50} noun="runs" />
     </Shell>
   );
 }

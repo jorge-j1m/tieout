@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Break, ExceptionStatus } from "@tieout/contracts";
 import { Money } from "@/components/primitives/Money";
-import { StateChip, type ChipTone } from "@/components/primitives/StateChip";
+import { StateChip, statusTone } from "@/components/primitives/StateChip";
 import { TYPE_LABEL, sourceLabel } from "@/lib/explain/labels";
 import { headlineFor } from "@/lib/explain/present";
 import { breakHref } from "@/lib/routes";
@@ -11,12 +11,6 @@ export interface BreakRow {
   break: Break;
   status: ExceptionStatus | null;
 }
-
-const STATUS_TONE: Record<ExceptionStatus, ChipTone> = {
-  open: "break",
-  acknowledged: "pending",
-  resolved: "matched",
-};
 
 /** Distinct sources a break touches, e.g. "Ledger ↔ Stripe" for a two-sided break. */
 function sourcesLabel(brk: Break): string {
@@ -50,7 +44,7 @@ export function BreaksTable({ rows, now }: { rows: BreakRow[]; now: string }) {
             <span className="col-span-full flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted sm:col-start-2 sm:col-end-4">
               <span>{sourcesLabel(brk)}</span>
               {subject !== undefined && <span>· {age(subject.occurredAt, now)} old</span>}
-              {status !== null && <StateChip tone={STATUS_TONE[status]} label={status} />}
+              {status !== null && <StateChip tone={statusTone(status)} label={status} />}
             </span>
           </Link>
         );

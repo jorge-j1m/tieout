@@ -6,20 +6,17 @@ import {
   type ExceptionStatus,
 } from "@tieout/contracts";
 import { RunContextLine } from "@/components/chrome/RunContextLine";
+import { CapNote } from "@/components/data/CapNote";
 import { BreaksTable, type BreakRow } from "@/components/data/BreaksTable";
 import { WorklistFilters } from "@/components/data/WorklistFilters";
 import { SectionLabel } from "@/components/primitives/SectionLabel";
 import { Shell } from "@/components/primitives/Shell";
 import { EmptyTiedOut } from "@/components/states/EmptyTiedOut";
 import { getExceptions, getRunBreaks, getRuns } from "@/lib/api/endpoints";
+import { asMember } from "@/lib/enums";
 import { runHref } from "@/lib/routes";
 
 export const metadata = { title: "Breaks" };
-
-/** Narrow a raw query value to a known enum member, or undefined. */
-function asMember<T extends string>(values: readonly T[], raw: string | undefined): T | undefined {
-  return raw !== undefined && (values as readonly string[]).includes(raw) ? (raw as T) : undefined;
-}
 
 /** The breaks worklist: a run's disagreements, filterable by type and status. */
 export default async function BreaksPage({
@@ -85,6 +82,7 @@ export default async function BreaksPage({
                 : "Everything tied out."}
             </EmptyTiedOut>
           )}
+          <CapNote count={(breaks ?? []).length} cap={200} noun="breaks" />
         </div>
       </Shell>
     </>

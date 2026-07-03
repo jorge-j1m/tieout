@@ -10,7 +10,7 @@ import { Money } from "@/components/primitives/Money";
 import { Mono } from "@/components/primitives/Mono";
 import { SectionLabel } from "@/components/primitives/SectionLabel";
 import { Shell } from "@/components/primitives/Shell";
-import { StateChip, type ChipTone } from "@/components/primitives/StateChip";
+import { StateChip, statusTone } from "@/components/primitives/StateChip";
 import { getException, getRaw, getRun, getRuns, getTransaction } from "@/lib/api/endpoints";
 import { TYPE_LABEL } from "@/lib/explain/labels";
 import { breakHref } from "@/lib/routes";
@@ -24,13 +24,6 @@ export async function generateMetadata({
   const exception = await getException((await params).id);
   return { title: exception ? `Case · ${TYPE_LABEL[exception.type]}` : "Case" };
 }
-
-const STATUS_TONE: Record<string, ChipTone> = {
-  open: "break",
-  reopened: "break",
-  acknowledged: "pending",
-  resolved: "matched",
-};
 
 /**
  * A single exception, whole: the case's append-only history as the centerpiece,
@@ -46,11 +39,9 @@ export default async function ExceptionCasePage({ params }: { params: Promise<{ 
   const brk = exception.currentBreak;
   const subject = brk?.details.txns[0] ?? null;
 
-  // A currently-open case that carries a reopen event came back after a
-  // resolution — it reads as "Reopened", distinct from a first-time open.
-  const reopened =
-    exception.status === "open" && exception.events.some((e) => e.kind === "reopened");
-  const displayStatus = reopened ? "reopened" : exception.status;
+  // Reopened is computed by the API (the same fact the worklist rows carry) —
+  // a case that came back after a resolution reads as "Reopened", not "open".
+  const displayStatus = exception.reopened ? "reopened" : exception.status;
   const openedBy = exception.events[0]?.actor ?? "system";
   const ref = subject?.reference ?? subject?.sourceId ?? null;
 
@@ -77,7 +68,7 @@ export default async function ExceptionCasePage({ params }: { params: Promise<{ 
         <header className="mt-5 border-b border-hair pb-6">
           <div className="flex flex-wrap items-center gap-3">
             <StateChip tone="break" label={TYPE_LABEL[exception.type]} />
-            <StateChip tone={STATUS_TONE[displayStatus] ?? "muted"} label={displayStatus} />
+            <StateChip tone={statusTone(displayStatus)} label={displayStatus} />
           </div>
           <div className="mt-3.5 flex flex-wrap items-baseline gap-4">
             {subject !== null ? (

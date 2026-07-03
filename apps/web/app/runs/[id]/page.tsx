@@ -43,34 +43,35 @@ export default async function RunDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ tab?: string }>;
 }) {
-  const { id } = await params;
-  const run = await getRun(id);
-  if (run === null) notFound();
+  const [{ id }, { tab: rawTab }] = await Promise.all([params, searchParams]);
+  const tab = asRunTab(rawTab);
 
-  const tab = asRunTab((await searchParams).tab);
-
-  // The tab views and the sources strip are independent reads — fan out.
-  const [matches, breaks, diff, sources, exceptions] = await Promise.all([
-    getRunMatches(id),
-    getRunBreaks(id),
+  // One fan-out: the run, the always-shown reads (sources strip, diff badge),
+  // and only the active tab's rows — the other badges come free from run.stats,
+  // so an inactive tab costs nothing.
+  const [run, matches, breaks, exceptions, diff, sources] = await Promise.all([
+    getRun(id),
+    tab === "matches" ? getRunMatches(id) : null,
+    tab === "breaks" ? getRunBreaks(id) : null,
+    tab === "breaks" ? getExceptions() : null,
     getRunDiff(id),
     getSources(),
-    getExceptions(),
   ]);
+  if (run === null) notFound();
 
   const { stats } = run;
   const duration = runDurationSeconds(run);
   const pending = pendingCount(run);
   const quarantined = sources.reduce((n, s) => n + s.quarantinedUnits, 0);
 
-  const statusByFingerprint = new Map(exceptions.map((e) => [e.fingerprint, e.status]));
+  const statusByFingerprint = new Map((exceptions ?? []).map((e) => [e.fingerprint, e.status]));
   const breakRows: BreakRow[] = (breaks ?? []).map((brk) => ({
     break: brk,
     status: brk.fingerprint !== null ? (statusByFingerprint.get(brk.fingerprint) ?? null) : null,
   }));
 
   const counts: Record<RunTab, number> = {
-    matches: matches?.length ?? 0,
+    matches: stats.matches,
     breaks: stats.totalBreaks,
     diff: diff ? diff.appeared.length + diff.reopened.length + diff.selfResolved.length : 0,
   };
