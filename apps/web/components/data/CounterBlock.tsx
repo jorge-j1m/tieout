@@ -31,7 +31,7 @@ export function CounterBlock({
   tied?: boolean;
 }) {
   return (
-    <div className="flex-1 basis-52 py-6 pr-6">
+    <div className="flex-1 basis-52 py-6">
       <SectionLabel>{label}</SectionLabel>
       <div className={cx("figures mt-2.5 text-[clamp(32px,4.2vw,44px)] leading-none", TONE[tone])}>
         {value}

@@ -3,6 +3,7 @@ import type { ExceptionEvent, ExceptionEventKind } from "@tieout/contracts";
 import type { ChipTone } from "@/components/primitives/StateChip";
 import { UtcTime } from "@/components/primitives/UtcTime";
 import { shortId } from "@/lib/ids";
+import { runHref } from "@/lib/routes";
 import { cx } from "@/lib/cx";
 
 const KIND: Record<ExceptionEventKind, { label: string; tone: ChipTone }> = {
@@ -60,7 +61,7 @@ export function EventTimeline({ events }: { events: ExceptionEvent[] }) {
                   {event.runId !== null ? (
                     <>
                       by run{" "}
-                      <Link href={`/runs/${event.runId}`} className="font-mono text-ink underline">
+                      <Link href={runHref(event.runId)} className="font-mono text-ink underline">
                         {shortId(event.runId)}
                       </Link>
                     </>

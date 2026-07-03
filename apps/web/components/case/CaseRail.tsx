@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ExceptionDetail } from "@tieout/contracts";
 import { SectionLabel } from "@/components/primitives/SectionLabel";
 import { StateChip, type ChipTone } from "@/components/primitives/StateChip";
+import { exceptionHref } from "@/lib/routes";
 import { ActionButtons } from "./ActionButtons";
 import { EventTimeline } from "./EventTimeline";
 import { TriageMargin } from "./TriageMargin";
@@ -37,7 +38,7 @@ export function CaseRail({
       <div>
         <div className="flex items-center justify-between">
           <SectionLabel>The case</SectionLabel>
-          <Link href={`/exceptions/${exception.id}`} className="text-xs text-muted hover:text-ink">
+          <Link href={exceptionHref(exception.id)} className="text-xs text-muted hover:text-ink">
             open case →
           </Link>
         </div>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { BreakType } from "@tieout/contracts";
 import { Money } from "@/components/primitives/Money";
 import { TYPE_LABEL } from "@/lib/explain/labels";
+import { breaksByTypeHref } from "@/lib/routes";
 
 export interface TypeRollup {
   type: BreakType;
@@ -21,7 +22,7 @@ export function TypedList({ rows }: { rows: TypeRollup[] }) {
       {rows.map((row) => (
         <Link
           key={row.type}
-          href={`/breaks?type=${row.type}`}
+          href={breaksByTypeHref(row.type)}
           className="flex items-center gap-4 border-b border-hair px-1.5 py-3.5 no-underline hover:bg-wash"
         >
           <span className="min-w-36 flex-[1_1_200px] text-xs font-semibold uppercase tracking-[0.06em] text-break">

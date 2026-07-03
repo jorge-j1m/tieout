@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Shell } from "@/components/primitives/Shell";
 import { shortId } from "@/lib/ids";
+import { runHref } from "@/lib/routes";
 import { formatUtc } from "@/lib/time";
 
 /**
@@ -21,7 +22,7 @@ export function RunContextLine({
       <Shell className="py-[9px]">
         <span className="font-mono text-xs text-muted">
           run{" "}
-          <Link href={`/runs/${runId}`} className="text-ink underline">
+          <Link href={runHref(runId)} className="text-ink underline">
             {shortId(runId)}
           </Link>{" "}
           · as of {formatUtc(asOf)} · {ruleset}
