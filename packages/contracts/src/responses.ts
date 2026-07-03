@@ -31,18 +31,49 @@ const jsonObject = z.record(z.string(), z.unknown());
 
 // ── Runs ────────────────────────────────────────────────────────────────────
 
-/** `recon_runs.stats` — the persisted `ReconSummary` (packages/contracts/src/recon.ts). */
+/** An FX rate a run applied (D7): rate is a decimal string, never a float. */
+export const fxRateSchema = z.object({
+  base: z.string(),
+  quote: z.string(),
+  rate: z.string(),
+  rateSource: z.string(),
+  rateDate: z.string(),
+});
+
+/** The configuration a run recorded so it stays reproducible and self-describing. */
+export const runConfigSchema = z.object({
+  windowMs: z.number(),
+  toleranceMinor: moneyStringSchema,
+  fxToleranceBps: z.number().nullable(),
+  fxRates: z.array(fxRateSchema),
+  lagMsBySource: z.record(z.string(), z.number()).nullable(),
+  duplicateWindowMs: z.number().nullable(),
+});
+
+/** A transaction the run held as pending inside its settlement-lag window (D12). */
+export const pendingRefSchema = z.object({
+  id: z.string(),
+  version: z.number().int(),
+  source: z.string(),
+  sourceId: z.string(),
+});
+
+/**
+ * `recon_runs.stats` — exactly what `apps/jobs` pipeline persists: the counts,
+ * the breaks-by-type histogram (every type, including zeros), the pending set,
+ * and the run's own config. This is the audit record of what the run evaluated.
+ */
 export const reconStatsSchema = z.object({
-  runId: z.string(),
-  asOf: iso,
-  rulesetVersion: z.string(),
+  evaluatedTransactions: z.number().int(),
+  ledgerTransactions: z.number().int(),
+  externalTransactions: z.number().int(),
   matches: z.number().int(),
   matchedTransactions: z.number().int(),
-  /** Keyed by break type; only types that occurred are present. */
   breaks: z.record(z.string(), z.number().int()),
   totalBreaks: z.number().int(),
-  /** Settlement-lag suppressions by source (D12); empty when no lag is configured. */
   pendingBySource: z.record(z.string(), z.number().int()),
+  pending: z.array(pendingRefSchema),
+  config: runConfigSchema,
 });
 
 export const runSchema = z.object({
@@ -55,22 +86,6 @@ export const runSchema = z.object({
   finishedAt: iso.nullable(),
   createdAt: iso,
 });
-
-/** An FX rate a run applied (D7): rate is a decimal string, never a float. */
-export const fxRateSchema = z.object({
-  base: z.string(),
-  quote: z.string(),
-  rate: z.string(),
-  rateSource: z.string(),
-  rateDate: z.string(),
-});
-
-/** The run's recorded configuration, folded onto the single-run response. */
-export const runConfigSchema = z.object({
-  fxRates: z.array(fxRateSchema),
-});
-
-export const runDetailSchema = runSchema.extend({ config: runConfigSchema });
 
 // ── Breaks ──────────────────────────────────────────────────────────────────
 
@@ -282,11 +297,11 @@ export const meSchema = z.object({ operator: z.string().nullable() });
 
 // ── Inferred types ────────────────────────────────────────────────────────────
 
-export type ReconStats = z.infer<typeof reconStatsSchema>;
-export type Run = z.infer<typeof runSchema>;
 export type FxRate = z.infer<typeof fxRateSchema>;
 export type RunConfig = z.infer<typeof runConfigSchema>;
-export type RunDetail = z.infer<typeof runDetailSchema>;
+export type PendingRef = z.infer<typeof pendingRefSchema>;
+export type ReconStats = z.infer<typeof reconStatsSchema>;
+export type Run = z.infer<typeof runSchema>;
 export type BreakTxnDetail = z.infer<typeof breakTxnDetailSchema>;
 export type BreakDetails = z.infer<typeof breakDetailsSchema>;
 export type Break = z.infer<typeof breakSchema>;

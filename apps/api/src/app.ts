@@ -14,7 +14,6 @@ import {
   breaks,
   exceptionEvents,
   exceptions,
-  fxRates,
   ingestionBatches,
   matches,
   matchMembers,
@@ -96,22 +95,9 @@ export function createApp({ db, operatorTokens }: ApiOptions): Hono<Env> {
     const id = idParam(c);
     if (id === null) return notFound();
     const [run] = await db.select().from(reconRuns).where(eq(reconRuns.id, id));
-    if (run === undefined) return notFound();
-    // The rates available to the run on its as-of day (D7) — so "the rate is the
-    // suspect" on an fx_drift break is provable, not asserted. Money/rates as strings.
-    const asOfDate = run.asOf.toISOString().slice(0, 10);
-    const rates = await db
-      .select({
-        base: fxRates.base,
-        quote: fxRates.quote,
-        rate: fxRates.rate,
-        rateSource: fxRates.rateSource,
-        rateDate: fxRates.rateDate,
-      })
-      .from(fxRates)
-      .where(eq(fxRates.rateDate, asOfDate))
-      .orderBy(asc(fxRates.base), asc(fxRates.quote));
-    return json({ ...run, config: { fxRates: rates } });
+    // The run's recorded configuration (tolerances, the FX rates it applied) already
+    // rides in `stats.config` — the run persists what it evaluated, so nothing to join.
+    return run === undefined ? notFound() : json(run);
   });
 
   /**
@@ -267,7 +253,11 @@ export function createApp({ db, operatorTokens }: ApiOptions): Hono<Env> {
         .select({
           source: ingestionBatches.source,
           batches: sql<number>`count(*)::int`,
-          lastLanded: sql<Date | null>`max(${ingestionBatches.observedAt})`,
+          // Aggregates lose the timestamptz parser, so format ISO-UTC in SQL rather
+          // than hand a driver-specific string to `new Date()` on the web side.
+          lastLanded: sql<
+            string | null
+          >`to_char(max(${ingestionBatches.observedAt}) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')`,
         })
         .from(ingestionBatches)
         .groupBy(ingestionBatches.source),

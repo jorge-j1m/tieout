@@ -9,7 +9,6 @@ import {
   meSchema,
   quarantineSchema,
   rawWithBatchSchema,
-  runDetailSchema,
   runDiffSchema,
   runSchema,
   sourceSummarySchema,
@@ -35,7 +34,7 @@ const exceptionsSchema = z.array(exceptionSchema);
 
 export const getRuns = cache((limit = 50) => fetchJson(`/runs?limit=${limit}`, runsSchema));
 
-export const getRun = cache((id: string) => fetchJsonOrNull(`/runs/${id}`, runDetailSchema));
+export const getRun = cache((id: string) => fetchJsonOrNull(`/runs/${id}`, runSchema));
 
 export const getRunDiff = cache((id: string) => fetchJsonOrNull(`/runs/${id}/diff`, runDiffSchema));
 

@@ -121,7 +121,9 @@ export async function runRecon(db: Db, opts: ReconOptions): Promise<ReconSummary
       ledgerTransactions: ledger.length,
       externalTransactions: external.length,
       matches: matches.length,
+      matchedTransactions: matches.reduce((n, m) => n + m.members.length, 0),
       breaks: breakCounts,
+      totalBreaks: breaks.length,
       pendingBySource,
       pending: pending.map((p) => ({ ...p.ref, source: p.source, sourceId: p.sourceId })),
       config: {

@@ -5,7 +5,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   breaks,
   exceptions,
-  fxRates,
   ingestionBatches,
   matches,
   matchMembers,
@@ -364,18 +363,6 @@ describe("api: demo persona reads, operators mutate exceptions", () => {
     expect(ledger).toMatchObject({ records: 2, batches: 1, quarantinedUnits: 0 });
     expect(ledger.lastLanded).not.toBeNull();
     expect(rows.find((r) => r.source === "pagolat")!.quarantinedUnits).toBe(1);
-  });
-
-  it("GET /runs/:id carries the FX rates recorded for its as-of day", async () => {
-    await client.db
-      .insert(fxRates)
-      .values({ base: "MXN", quote: "USD", rate: "0.0588", rateSource: "seed", rateDate: "2026-06-01" });
-    const body = (await (await app.request(`/runs/${run1}`)).json()) as {
-      config: { fxRates: { base: string; quote: string; rate: string }[] };
-    };
-    expect(body.config.fxRates).toContainEqual(
-      expect.objectContaining({ base: "MXN", quote: "USD", rate: "0.0588" }),
-    );
   });
 
   it("computes seenInRuns on the worklist and the detail", async () => {
