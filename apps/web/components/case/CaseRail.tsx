@@ -3,7 +3,7 @@ import type { ExceptionDetail } from "@tieout/contracts";
 import { SectionLabel } from "@/components/primitives/SectionLabel";
 import { StateChip, type ChipTone } from "@/components/primitives/StateChip";
 import { exceptionHref } from "@/lib/routes";
-import { ActionButtons } from "./ActionButtons";
+import { CaseActions } from "./CaseActions";
 import { EventTimeline } from "./EventTimeline";
 import { TriageMargin } from "./TriageMargin";
 
@@ -16,7 +16,7 @@ const STATUS_TONE: Record<ExceptionDetail["status"], ChipTone> = {
 /**
  * The human side of a break: the exception case. Status, how many runs have seen
  * it, its append-only history, the operator actions, and — set apart — Claude's
- * margin note. Reads only; the write path is the exceptions workflow (Phase 3).
+ * margin note. Operators can act inline; the demo sees the controls, inert.
  */
 export function CaseRail({
   exception,
@@ -57,7 +57,7 @@ export function CaseRail({
         </div>
       </div>
 
-      <ActionButtons canMutate={canMutate} />
+      <CaseActions exceptionId={exception.id} canMutate={canMutate} />
 
       {latestTriage !== undefined && <TriageMargin suggestion={latestTriage} />}
     </aside>

@@ -22,3 +22,7 @@ export const breaksHref = (params: { run?: string; type?: string; status?: strin
 
 export const breaksByTypeHref = (type: string): Route => `/breaks?type=${type}` as Route;
 export const exceptionHref = (id: string): Route => `/exceptions/${id}` as Route;
+
+/** The exceptions worklist, optionally filtered to one status tab. */
+export const exceptionsHref = (status?: string): Route =>
+  (status === undefined ? "/exceptions" : `/exceptions?status=${status}`) as Route;

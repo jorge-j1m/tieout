@@ -18,6 +18,7 @@ import { GLOSS, TYPE_LABEL } from "@/lib/explain/labels";
 import { headlineFor } from "@/lib/explain/present";
 import { shortId } from "@/lib/ids";
 import { formatMoney } from "@/lib/money";
+import { getPersona } from "@/lib/session";
 
 export async function generateMetadata({
   params,
@@ -38,10 +39,11 @@ export default async function BreakExplainPage({ params }: { params: Promise<{ i
 
   // Fan out the reads that don't depend on each other; the raw record needs the
   // transaction's rawId, so it follows.
-  const [transaction, run, exception] = await Promise.all([
+  const [transaction, run, exception, persona] = await Promise.all([
     getTransaction(primary.id),
     getRun(brk.runId),
     getExceptionByFingerprint(brk.fingerprint),
+    getPersona(),
   ]);
   const raw = transaction !== null ? await getRaw(transaction.rawId) : null;
 
@@ -87,8 +89,7 @@ export default async function BreakExplainPage({ params }: { params: Promise<{ i
               />
             )}
           </div>
-          {/* Phase 3 replaces `false` with the real operator persona. */}
-          <CaseRail exception={exception} canMutate={false} />
+          <CaseRail exception={exception} canMutate={persona.operator !== null} />
         </div>
       </Shell>
     </>

@@ -4,7 +4,7 @@ import { z } from "zod";
 import {
   breakSchema,
   exceptionDetailSchema,
-  exceptionSchema,
+  exceptionRowSchema,
   matchWithMembersSchema,
   meSchema,
   quarantineSchema,
@@ -30,7 +30,7 @@ const breaksSchema = z.array(breakSchema);
 const matchesSchema = z.array(matchWithMembersSchema);
 const sourcesSchema = z.array(sourceSummarySchema);
 const quarantinesSchema = z.array(quarantineSchema);
-const exceptionsSchema = z.array(exceptionSchema);
+const exceptionsSchema = z.array(exceptionRowSchema);
 
 export const getRuns = cache((limit = 50) => fetchJson(`/runs?limit=${limit}`, runsSchema));
 

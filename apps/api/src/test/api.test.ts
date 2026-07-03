@@ -65,7 +65,7 @@ describe("api: demo persona reads, operators mutate exceptions", () => {
       await db.insert(breaks).values({
         runId,
         type: "missing_in_ledger",
-        details: { txns: [{ sourceId: "txn_x" }] },
+        details: { txns: [{ sourceId: "txn_x", amountMinor: "6681", currency: "USD" }] },
         fingerprint,
       });
     };
@@ -232,6 +232,23 @@ describe("api: demo persona reads, operators mutate exceptions", () => {
     const rows = (await (await app.request("/quarantine")).json()) as { stage: string }[];
     expect(rows).toHaveLength(1);
     expect(rows[0]!.stage).toBe("batch");
+  });
+
+  it("enriches the exceptions worklist with subject, seen-in-runs, and last actor", async () => {
+    const rows = (await (await app.request("/exceptions")).json()) as {
+      id: string;
+      seenInRuns: number;
+      lastActor: string;
+      reopened: boolean;
+      amountMinor: string | null;
+      currency: string | null;
+      subjectId: string | null;
+    }[];
+    const open = rows.find((e) => e.id === openExceptionId)!;
+    expect(open.seenInRuns).toBe(1);
+    expect(open.lastActor).toBe("system"); // only the run-driven "opened" event so far
+    expect(open.reopened).toBe(false);
+    expect(open).toMatchObject({ amountMinor: "6681", currency: "USD", subjectId: "txn_x" });
   });
 
   it("rejects every mutation from the demo persona — no token, bad token", async () => {

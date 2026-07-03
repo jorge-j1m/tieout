@@ -30,6 +30,32 @@ export async function fetchJson<T>(
   return schema.parse(await response.json());
 }
 
+/**
+ * POST `path` with a JSON body and an operator bearer token — the web's only
+ * write path, used by the exception mutations. Returns the API's own error
+ * message on failure so the operator sees why (a 401 for a lapsed session, a 409
+ * for an illegal transition) rather than a generic wall.
+ */
+export async function postJson(
+  path: string,
+  body: unknown,
+  token: string,
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const response = await fetch(`${apiBaseUrl()}${path}`, {
+    method: "POST",
+    cache: "no-store",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+  if (response.ok) return { ok: true };
+  const detail = (await response.json().catch(() => null)) as { error?: string } | null;
+  return {
+    ok: false,
+    status: response.status,
+    error: detail?.error ?? `API ${path} responded ${response.status}`,
+  };
+}
+
 /** Like `fetchJson`, but a 404 becomes `null` — the RSC signal for `notFound()`. */
 export async function fetchJsonOrNull<T>(
   path: string,

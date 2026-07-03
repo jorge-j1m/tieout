@@ -52,6 +52,28 @@ const badRequest = (detail: unknown) => json({ error: "invalid request", detail 
 
 const uuidSchema = z.uuid();
 
+/**
+ * A break's subject line — the first transaction in its details — so the
+ * exceptions worklist can show an amount and an id without embedding the whole
+ * break. `details` is jsonb, so every field is checked rather than trusted.
+ */
+function subjectOf(
+  details: unknown,
+): { amountMinor: string; currency: string; sourceId: string } | null {
+  if (details === null || typeof details !== "object") return null;
+  const txns = (details as { txns?: unknown }).txns;
+  if (!Array.isArray(txns) || txns.length === 0) return null;
+  const t = txns[0] as Record<string, unknown>;
+  if (
+    typeof t.amountMinor === "string" &&
+    typeof t.currency === "string" &&
+    typeof t.sourceId === "string"
+  ) {
+    return { amountMinor: t.amountMinor, currency: t.currency, sourceId: t.sourceId };
+  }
+  return null;
+}
+
 type Env = { Variables: { operator: string } };
 
 export function createApp({ db, operatorTokens }: ApiOptions): Hono<Env> {
@@ -310,29 +332,66 @@ export function createApp({ db, operatorTokens }: ApiOptions): Hono<Env> {
       .where(where)
       .orderBy(desc(exceptions.updatedAt), asc(exceptions.fingerprint))
       .limit(query.data.limit);
-    // "seen in N runs" (D18): distinct runs that reported the underlying break —
-    // the run-driven opened/reopened events. One grouped query, merged in memory.
-    const seenRows =
-      rows.length === 0
-        ? []
-        : await db
-            .select({
-              exceptionId: exceptionEvents.exceptionId,
-              seenInRuns: sql<number>`count(distinct ${exceptionEvents.runId})::int`,
-            })
-            .from(exceptionEvents)
-            .where(
-              and(
-                inArray(
-                  exceptionEvents.exceptionId,
-                  rows.map((r) => r.id),
-                ),
-                inArray(exceptionEvents.kind, ["opened", "reopened"]),
-              ),
-            )
-            .groupBy(exceptionEvents.exceptionId);
-    const seenByException = new Map(seenRows.map((s) => [s.exceptionId, s.seenInRuns]));
-    return json(rows.map((r) => ({ ...r, seenInRuns: seenByException.get(r.id) ?? 0 })));
+    if (rows.length === 0) return json([]);
+    const ids = rows.map((r) => r.id);
+
+    // One events read powers three worklist facts without a query per row:
+    // "seen in N runs" (D18: distinct opened/reopened runs), who touched the case
+    // last, and whether it came back after a resolution ("reopened"). Ordered by
+    // time so the last row wins for the actor.
+    const events = await db
+      .select({
+        exceptionId: exceptionEvents.exceptionId,
+        kind: exceptionEvents.kind,
+        actor: exceptionEvents.actor,
+        runId: exceptionEvents.runId,
+      })
+      .from(exceptionEvents)
+      .where(inArray(exceptionEvents.exceptionId, ids))
+      .orderBy(asc(exceptionEvents.createdAt), asc(exceptionEvents.id));
+
+    // The subject amount + id come from each case's current break (set-based join).
+    const breakRows = await db
+      .select({ id: breaks.id, details: breaks.details })
+      .from(breaks)
+      .where(
+        inArray(
+          breaks.id,
+          rows.map((r) => r.currentBreakId),
+        ),
+      );
+    const detailsByBreak = new Map(breakRows.map((b) => [b.id, b.details]));
+
+    type Roll = { runs: Set<string>; lastActor: string; reopened: boolean };
+    const rollByException = new Map<string, Roll>();
+    for (const e of events) {
+      let roll = rollByException.get(e.exceptionId);
+      if (roll === undefined) {
+        roll = { runs: new Set(), lastActor: e.actor, reopened: false };
+        rollByException.set(e.exceptionId, roll);
+      }
+      if ((e.kind === "opened" || e.kind === "reopened") && e.runId !== null) roll.runs.add(e.runId);
+      if (e.kind === "reopened") roll.reopened = true;
+      roll.lastActor = e.actor;
+    }
+
+    return json(
+      rows.map((r) => {
+        const roll = rollByException.get(r.id);
+        const subject = subjectOf(detailsByBreak.get(r.currentBreakId));
+        return {
+          ...r,
+          seenInRuns: roll ? roll.runs.size : 0,
+          lastActor: roll?.lastActor ?? "system",
+          // Reopened is a lifecycle fact, not a status: a currently-open case that
+          // recurred after someone had resolved it (the world disagreed again).
+          reopened: r.status === "open" && (roll?.reopened ?? false),
+          amountMinor: subject?.amountMinor ?? null,
+          currency: subject?.currency ?? null,
+          subjectId: subject?.sourceId ?? null,
+        };
+      }),
+    );
   });
 
   app.get("/exceptions/:id", async (c) => {

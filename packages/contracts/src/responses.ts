@@ -243,6 +243,20 @@ export const exceptionSchema = z.object({
   seenInRuns: z.number().int(),
 });
 
+/**
+ * A worklist row: the exception plus the few facts the table shows, computed by
+ * the API so the client makes no per-row request. `reopened` is a lifecycle
+ * fact (recurred after a resolution), not a fourth status; the subject fields
+ * are null when the current break carries no transaction detail.
+ */
+export const exceptionRowSchema = exceptionSchema.extend({
+  lastActor: z.string(),
+  reopened: z.boolean(),
+  amountMinor: moneyStringSchema.nullable(),
+  currency: z.string().nullable(),
+  subjectId: z.string().nullable(),
+});
+
 export const exceptionEventSchema = z.object({
   id: z.string(),
   exceptionId: z.string(),
@@ -329,7 +343,8 @@ export type Batch = z.infer<typeof batchSchema>;
 export type RawWithBatch = z.infer<typeof rawWithBatchSchema>;
 export type MatchMember = z.infer<typeof matchMemberSchema>;
 export type MatchWithMembers = z.infer<typeof matchWithMembersSchema>;
-export type ExceptionRow = z.infer<typeof exceptionSchema>;
+export type Exception = z.infer<typeof exceptionSchema>;
+export type ExceptionRow = z.infer<typeof exceptionRowSchema>;
 export type ExceptionEvent = z.infer<typeof exceptionEventSchema>;
 export type TriageSuggestion = z.infer<typeof triageSuggestionSchema>;
 export type ExceptionDetail = z.infer<typeof exceptionDetailSchema>;
