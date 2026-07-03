@@ -55,3 +55,27 @@
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
+
+/*
+ * The signature moment: when a break's evidence loads, the hops draw in
+ * sequence down the spine — fast, once, never looping. Each hop sets its own
+ * --hop-index; motion is off entirely for readers who ask for less.
+ */
+@keyframes hop-draw-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hop-draw {
+    opacity: 0;
+    animation: hop-draw-in 180ms ease-out forwards;
+    animation-delay: calc(var(--hop-index, 0) * 90ms);
+  }
+}

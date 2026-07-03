@@ -76,6 +76,18 @@ export const getException = cache((id: string) =>
   fetchJsonOrNull(`/exceptions/${id}`, exceptionDetailSchema),
 );
 
+/**
+ * The case tracking a break, found by the shared fingerprint (exceptions key on
+ * it, D18). The worklist is small, so one list + a find beats a bespoke lookup
+ * endpoint; `cache()` collapses repeat calls within a render.
+ */
+export const getExceptionByFingerprint = cache(async (fingerprint: string | null) => {
+  if (fingerprint === null) return null;
+  const all = await getExceptions();
+  const match = all.find((e) => e.fingerprint === fingerprint);
+  return match !== undefined ? getException(match.id) : null;
+});
+
 /** Who a bearer token names — `null` operator means the demo persona. Uncached: auth. */
 export const getMe = (token?: string) =>
   fetchJson("/me", meSchema, {
