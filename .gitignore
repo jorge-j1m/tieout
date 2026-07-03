@@ -27,6 +27,10 @@ out/
 build
 dist
 
+# Playwright (e2e artifacts)
+test-results/
+playwright-report/
+
 
 # Debug
 npm-debug.log*
