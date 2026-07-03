@@ -9,7 +9,7 @@ import type {
   SourceAdapter,
   TxnStatus,
 } from "@tieout/contracts";
-import { normalizedTxnSchema } from "@tieout/contracts";
+import { LEDGER_SOURCE, normalizedTxnSchema } from "@tieout/contracts";
 import {
   canonicalJson,
   contentHash,
@@ -19,7 +19,9 @@ import {
 } from "@tieout/core";
 import { quarantine, quarantineFromZod } from "../quarantine.js";
 
-export const LEDGER_SOURCE = "ledger";
+// The id itself lives in contracts (the matching model partitions on it);
+// re-exported here so adapter consumers keep their one import site.
+export { LEDGER_SOURCE };
 export const LEDGER_NORMALIZER_VERSION = "ledger-v1";
 
 /**

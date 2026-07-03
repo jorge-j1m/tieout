@@ -27,6 +27,10 @@ out/
 build
 dist
 
+# Playwright (e2e artifacts)
+test-results/
+playwright-report/
+
 
 # Debug
 npm-debug.log*
@@ -36,3 +40,6 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+
+# TypeScript incremental build info
+*.tsbuildinfo

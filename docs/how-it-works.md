@@ -454,8 +454,12 @@ recon run 7e9b0611-…
 But the summary is just the receipt. The real output is the permanent record in
 Tieout's database: the run, its matches (each naming transaction **and version**),
 its breaks (with full details), and the exceptions worklist they feed — all queryable
-forever. Stage 3 puts a dashboard on top; the data model underneath is stable and
-designed to extend — later stages add to it, never rewrite it.
+forever. That record has two consumers, not one: the `apps/api` domain API, and — on
+top of it — the `apps/web` dashboard (Stage 3), where a break can be followed from a
+plain-English headline down to the raw bytes it came from, and an operator works cases
+without ever editing the books. The dashboard shows nothing it can't fetch from the
+record (D34); the data model underneath is stable and designed to extend — later
+stages add to it, never rewrite it.
 
 ## 8. "Why was this flagged in March?" — reproducibility
 
@@ -579,10 +583,11 @@ repository, and only Stripe *test mode* keys are ever used.
 
 ## 12. What the engine deliberately does not do (yet)
 
-So you don't go looking for it: no dashboard or UI and no exceptions *screens* — the
-exceptions lifecycle itself (open → acknowledged → resolved, reopened by facts,
-self-resolved when the books get fixed, every transition in an append-only history)
-already runs headless under every recon run; Stage 3 puts faces on it. No bank or
+So you don't go looking for it: the exceptions lifecycle (open → acknowledged →
+resolved, reopened by facts, self-resolved when the books get fixed, every transition
+in an append-only history) runs headless under every recon run; Stage 3's `apps/web`
+dashboard puts faces on it — a worklist, a case view, the evidence spine — without
+changing what the engine does. No bank or
 stablecoin sources and no three-way payout reconciliation (Stage 4). No webhooks
 (poll is truth; webhooks would only ever be freshness hints). No intra-source group
 integrity checks (see the FAQ above). Each of these is scoped in [`specs/`](specs/)

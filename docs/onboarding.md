@@ -93,6 +93,8 @@ parameter). That purity is what makes its property tests trustworthy; don't erod
 | `pnpm recon` CLI | `apps/jobs/src/cli/recon.ts` | — |
 | LLM triage: prompt, input hash, pass orchestration (D33) | `packages/triage/src/{triage,pass}.ts`; suggestions stored via `packages/db/src/services/triage.ts` | `triage/src/triage.test.ts` (mocked client) + `pass.test.ts` (cache/cap/retry against the test db) |
 | Stage acceptance, end to end (incl. tombstones, lag, outbox sweep, replay) | `apps/jobs/src/test/integration.test.ts` | itself |
+| Domain API: reads over the record + exceptions-only mutations (D32) | `apps/api/src/app.ts` (`createApp`); auth in `apps/api/src/auth.ts` | `apps/api/src/test/api.test.ts` |
+| Dashboard: RSC pages reading the API, evidence spine, exceptions workflow (D34–D36) | `apps/web/` — `app/` routes, `components/`, `lib/{api,session,explain,money}` | `apps/web/**/*.test.ts` (pure presenters + server-action logic) + Playwright e2e in `apps/web/test/e2e/` |
 
 Rule of thumb for *where new logic goes*: if it's a decision (matching, money,
 classification) → `core`. If it's a source dialect → that adapter. If it's "write/read
@@ -231,6 +233,29 @@ You almost never touch stored rows. Decision tree:
   record of what v1 concluded).
 - The raw payload itself is wrong in our store → that can only mean a landing bug;
   fix `land()`, re-land (new content hash → new versions). Still no UPDATE.
+
+### 3.9 Add or change a dashboard page (`apps/web`)
+
+The web app shows only what it can fetch from the record (D34), so a new page starts
+at the read, not the render.
+
+1. **Does the API already expose the data?** If not, add a read endpoint to
+   `apps/api/src/app.ts` — thin and set-based (no N+1: join or `inArray`, never a query
+   per row), money stays a string. Add its Zod schema to `packages/contracts/src/responses.ts`
+   and a case to `apps/api/src/test/api.test.ts`. Never open a financial write path.
+2. **Type the read** in `apps/web/lib/api/endpoints.ts` (one `cache()`-wrapped function
+   per route, parsed through the contract schema by `lib/api/client.ts`).
+3. **Put logic in a pure module** under `lib/` (like `lib/overview.ts`, `lib/quarantine.ts`)
+   and unit-test *that* — not the markup. The page and components stay thin over it.
+4. **Build the page** as a Server Component in `app/…/page.tsx`; reach for a Client
+   Component only for genuine interactivity (a dialog, a dropdown). Compose existing
+   primitives (`Money`, `StateChip`, `DoubleRule`, `SectionLabel`) — never inline a hex
+   value; the tokens live in `app/globals.css` (D35). Mutations go through Server Actions
+   that forward the session token (D36), never a client-side `fetch` to the API.
+5. **Verify.** `pnpm --filter @tieout/web typecheck lint test`, then render it live
+   against a running API. For the demo's core path, extend the Playwright walk in
+   `test/e2e/`. Trap: don't recreate a number the record doesn't have — if the page needs
+   it, the API must return it, or it isn't provable.
 
 ## 4. How you know you're done
 

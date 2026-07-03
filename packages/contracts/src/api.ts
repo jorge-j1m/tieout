@@ -16,6 +16,8 @@ export const breaksQuerySchema = listQuerySchema.extend({
 
 export const exceptionsQuerySchema = listQuerySchema.extend({
   status: z.enum(EXCEPTION_STATUSES).optional(),
+  /** Exact-match lookup — exceptions are fingerprint-keyed cases (D18/D30). */
+  fingerprint: z.string().optional(),
 });
 
 export const acknowledgeBodySchema = z.object({

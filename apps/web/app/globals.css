@@ -1,0 +1,101 @@
+@import "tailwindcss";
+
+/**
+ * The editorial-ledger tokens (spec stage-3-web, D35). The ground is calm paper;
+ * structure comes from hairline rules and whitespace; color appears only where
+ * state demands it. Light only — this is the brand. Never inline a hex value in
+ * JSX: if a value has no token here, it gets one first.
+ */
+@theme {
+  /* ground */
+  --color-paper: #fbfaf7; /* warm paper white — the page */
+  --color-ink: #16130e; /* ink — primary text */
+  --color-muted: #6b6558; /* muted ink — secondary text */
+  --color-hair: #e6e2d8; /* hairline rules — all structure */
+  --color-wash: #f4f1ea; /* hover/selected wash */
+  --color-skeleton: #edeae1; /* loading rules */
+
+  /* state — color means disagreement (all AA on paper) */
+  --color-break: #8c2b1f; /* oxblood — breaks, mismatch */
+  --color-matched: #1e5c41; /* ledger green — matched, resolved */
+  --color-pending: #8a5a00; /* amber — pending, acknowledged */
+
+  /* type — Plex, self-hosted via next/font (variables set on <html>) */
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "SF Mono", monospace;
+}
+
+@layer base {
+  html {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+  }
+
+  /* Focus is the double rule: final, tied out. Never an invisible outline. */
+  :focus-visible {
+    outline: none;
+    box-shadow:
+      0 3px 0 0 var(--color-ink),
+      0 6px 0 0 var(--color-paper),
+      0 7px 0 0 var(--color-ink);
+  }
+}
+
+/* Letterspaced small-caps section label — the financial-statement move. */
+@utility label-caps {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+/* Money, ids, hashes, timestamps: monospace with tabular figures, exact. */
+@utility figures {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The signature moment: when a break's evidence loads, the hops draw in
+ * sequence down the spine — fast, once, never looping. Each hop sets its own
+ * --hop-index; motion is off entirely for readers who ask for less.
+ */
+@keyframes hop-draw-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hop-draw {
+    opacity: 0;
+    animation: hop-draw-in 180ms ease-out forwards;
+    animation-delay: calc(var(--hop-index, 0) * 90ms);
+  }
+}
+
+/*
+ * Loading skeletons are hairline rules that breathe — never gray blocks. The
+ * pulse is a quiet opacity sway; readers who ask for less see it hold still.
+ */
+@keyframes ledger-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.75;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton-pulse {
+    animation: ledger-pulse 1.5s ease-in-out infinite;
+  }
+}

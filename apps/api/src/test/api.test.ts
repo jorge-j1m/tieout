@@ -6,6 +6,8 @@ import {
   breaks,
   exceptions,
   ingestionBatches,
+  matches,
+  matchMembers,
   quarantinedRecords,
   rawRecords,
   reconRuns,
@@ -63,7 +65,7 @@ describe("api: demo persona reads, operators mutate exceptions", () => {
       await db.insert(breaks).values({
         runId,
         type: "missing_in_ledger",
-        details: { txns: [{ sourceId: "txn_x" }] },
+        details: { txns: [{ sourceId: "txn_x", amountMinor: "6681", currency: "USD" }] },
         fingerprint,
       });
     };
@@ -226,10 +228,37 @@ describe("api: demo persona reads, operators mutate exceptions", () => {
     expect(body.batch.id).toBeDefined();
   });
 
-  it("lists quarantine for the demo persona", async () => {
-    const rows = (await (await app.request("/quarantine")).json()) as { stage: string }[];
+  it("lists quarantine for the demo persona, named by the offending file", async () => {
+    const rows = (await (await app.request("/quarantine")).json()) as {
+      stage: string;
+      batchRef: string | null;
+    }[];
     expect(rows).toHaveLength(1);
     expect(rows[0]!.stage).toBe("batch");
+    expect(rows[0]!.batchRef).toBe("api-test"); // joined from the ingestion batch
+  });
+
+  it("enriches the exceptions worklist with subject, seen-in-runs, and last actor", async () => {
+    const rows = (await (await app.request("/exceptions")).json()) as {
+      id: string;
+      seenInRuns: number;
+      lastActor: string;
+      reopened: boolean;
+      amountMinor: string | null;
+      currency: string | null;
+      subjectId: string | null;
+    }[];
+    const open = rows.find((e) => e.id === openExceptionId)!;
+    expect(open.seenInRuns).toBe(1);
+    expect(open.lastActor).toBe("system"); // only the run-driven "opened" event so far
+    expect(open.reopened).toBe(false);
+    expect(open).toMatchObject({ amountMinor: "6681", currency: "USD", subjectId: "txn_x" });
+
+    // Fingerprint lookup: exceptions are fingerprint-keyed cases (D18/D30).
+    const byFp = (await (await app.request("/exceptions?fingerprint=fp_b")).json()) as { id: string }[];
+    expect(byFp.map((e) => e.id)).toEqual([openExceptionId]);
+    const none = (await (await app.request("/exceptions?fingerprint=nope")).json()) as unknown[];
+    expect(none).toEqual([]);
   });
 
   it("rejects every mutation from the demo persona — no token, bad token", async () => {
@@ -269,10 +298,12 @@ describe("api: demo persona reads, operators mutate exceptions", () => {
     const detail = (await (await app.request(`/exceptions/${openExceptionId}`)).json()) as {
       events: { kind: string; actor: string; note: string | null }[];
       currentBreak: { fingerprint: string };
+      reopened: boolean;
     };
     expect(detail.events.map((e) => e.kind)).toEqual(["opened", "acknowledged", "resolved"]);
     expect(detail.events.at(-1)).toMatchObject({ actor: "ana", note: "fee booked manually" });
     expect(detail.currentBreak.fingerprint).toBe("fp_b");
+    expect(detail.reopened).toBe(false); // resolved — not an open case that came back
   });
 
   it("attaches triage suggestions to the exception detail — read-only annotations (D33)", async () => {
@@ -307,5 +338,85 @@ describe("api: demo persona reads, operators mutate exceptions", () => {
       confidence: "high",
       suggestedAction: "Re-check after the next ledger export.",
     });
+  });
+
+  // ── Stage-3 web read endpoints ──────────────────────────────────────────────
+
+  it("GET /me resolves both personas", async () => {
+    expect(await (await app.request("/me")).json()).toEqual({ operator: null });
+    const asOperator = await app.request("/me", { headers: OPERATOR });
+    expect(await asOperator.json()).toEqual({ operator: "ana" });
+  });
+
+  it("GET /breaks/:id returns one break with its details; 404s the unknown", async () => {
+    const [aBreak] = await client.db.select().from(breaks).where(eq(breaks.runId, run1));
+    const res = await app.request(`/breaks/${aBreak!.id}`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { id: string; details: { txns: unknown[] } };
+    expect(body.id).toBe(aBreak!.id);
+    expect(Array.isArray(body.details.txns)).toBe(true);
+    expect((await app.request(`/breaks/${randomUUID()}`)).status).toBe(404);
+    expect((await app.request("/breaks/not-a-uuid")).status).toBe(404);
+  });
+
+  it("GET /runs/:id/matches groups members under each match", async () => {
+    const [match] = await client.db
+      .insert(matches)
+      .values({ runId: run1, rulesetVersion: "ruleset-v2", kind: "exact_reference", details: { reference: "ch_x" } })
+      .returning({ id: matches.id });
+    await client.db
+      .insert(matchMembers)
+      .values({ matchId: match!.id, runId: run1, transactionId: currentTxnId, transactionVersion: 2 });
+
+    const res = await app.request(`/runs/${run1}/matches`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      kind: string;
+      members: { transactionId: string; transactionVersion: number; sourceId: string; amountMinor: string }[];
+    }[];
+    expect(body).toHaveLength(1);
+    expect(body[0]!.kind).toBe("exact_reference");
+    // Members carry the joined transaction version, so the Matches tab can name both sides.
+    expect(body[0]!.members).toEqual([
+      {
+        transactionId: currentTxnId,
+        transactionVersion: 2,
+        source: "ledger",
+        sourceId: "LED-1",
+        amountMinor: "4890",
+        currency: "USD",
+        reference: null,
+        type: "payment",
+      },
+    ]);
+    expect((await app.request(`/runs/${randomUUID()}/matches`)).status).toBe(404);
+  });
+
+  it("GET /sources summarizes records, batches, and quarantined units per source", async () => {
+    const rows = (await (await app.request("/sources")).json()) as {
+      source: string;
+      records: number;
+      batches: number;
+      quarantinedUnits: number;
+      lastLanded: string | null;
+    }[];
+    const ledger = rows.find((r) => r.source === "ledger")!;
+    expect(ledger).toMatchObject({ records: 2, batches: 1, quarantinedUnits: 0 });
+    expect(ledger.lastLanded).not.toBeNull();
+    expect(rows.find((r) => r.source === "pagolat")!.quarantinedUnits).toBe(1);
+  });
+
+  it("computes seenInRuns on the worklist and the detail", async () => {
+    // No status filter: earlier tests already walked this exception to `resolved`.
+    const list = (await (await app.request("/exceptions")).json()) as {
+      id: string;
+      seenInRuns: number;
+    }[];
+    const open = list.find((e) => e.id === openExceptionId)!;
+    expect(open.seenInRuns).toBe(1);
+    const detail = (await (await app.request(`/exceptions/${openExceptionId}`)).json()) as {
+      seenInRuns: number;
+    };
+    expect(detail.seenInRuns).toBe(1);
   });
 });
