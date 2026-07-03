@@ -32,7 +32,19 @@ const SOURCE_LABEL: Record<string, string> = {
   pagolat: "PagoLat",
 };
 
+/** What each source is, in a phrase — the sources strip's second line. */
+const SOURCE_KIND: Record<string, string> = {
+  stripe: "Card processor",
+  ledger: "Accounting ledger",
+  pagolat: "LatAm settlement PSP",
+};
+
 /** Display name for a source id; unknown sources pass through verbatim. */
 export function sourceLabel(source: string): string {
   return SOURCE_LABEL[source] ?? source;
+}
+
+/** One-phrase description of a source; empty for unknown sources. */
+export function sourceKind(source: string): string {
+  return SOURCE_KIND[source] ?? "";
 }
