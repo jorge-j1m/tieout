@@ -8,6 +8,8 @@ import type { NextConfig } from "next";
 config({ path: fileURLToPath(new URL("../../.env", import.meta.url)), quiet: true });
 
 const nextConfig: NextConfig = {
+  /** Self-contained server bundle for the Docker image (Dockerfile.web). */
+  output: "standalone",
   /** Typed <Link> hrefs — a route typo is a compile error, not a 404. */
   typedRoutes: true,
   /** The monorepo root, so file tracing sees the pnpm workspace store. */

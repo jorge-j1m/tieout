@@ -88,7 +88,7 @@ TIEOUT_TRIAGE_MAX_CALLS=25          # hard LLM-call cap per triage pass
 
 ## Exposure rules (all stages)
 
-- **Public internet**: only the demo web app, only from Stage 3, only via Cloudflare Tunnel (`cloudflared` as a compose service; outbound-only, no router ports). Cloudflare rate limiting on.
+- **Public internet**: only the demo dashboard (`tieout.jorgejim.com`) and the read-mostly api (`tieout-api.jorgejim.com`, D37), only from Stage 3, only via Cloudflare Tunnel (`cloudflared` as a compose service; outbound-only, no router ports). Cloudflare rate limiting on.
 - **Operator surfaces** (Trigger.dev dashboard, Drizzle Studio, MinIO console): Tailscale or Cloudflare Access. Never public.
 - **SSH**: Tailscale only, key auth only.
 
@@ -96,7 +96,7 @@ TIEOUT_TRIAGE_MAX_CALLS=25          # hard LLM-call cap per triage pass
 
 Separate compose projects with separate networks and separate Postgres instances, so the orchestrator can be rebuilt without touching financial data:
 
-1. **App stack** (`tieout-app`) — **built, in `deploy/docker-compose.yml`**: `postgres`; `minio`; a one-shot `migrate` service gating app start (`depends_on: condition: service_completed_successfully`); `api` (Hono, localhost-bound, Docker healthcheck on `/healthz`); `cloudflared` under the `public` profile (outbound tunnel → tieout.jorgejim.com). `web` (Next.js) joins when it exists. One image for api and migrate, built from the root `Dockerfile` (prod deps only, api+db workspace slice); runbook in `deploy/README.md`. `TIEOUT_TRIAGE_API_KEY` is deliberately absent from this stack — the demo serves precomputed triage suggestions only (D33).
+1. **App stack** (`tieout-app`) — **built, in `deploy/docker-compose.yml`**: `postgres`; `minio`; a one-shot `migrate` service gating app start (`depends_on: condition: service_completed_successfully`); `api` (Hono, localhost-bound, Docker healthcheck on `/healthz`); `web` (Next.js standalone from `Dockerfile.web`, localhost-bound `:3000`, reads the api over the stack network via `API_BASE_URL=http://api:3001`); `cloudflared` under the `public` profile — one outbound tunnel routing `tieout.jorgejim.com → web:3000` and `tieout-api.jorgejim.com → api:3001` (D37). One image for api and migrate, built from the root `Dockerfile` (prod deps only, api+db workspace slice); runbook in `deploy/README.md`. `TIEOUT_TRIAGE_API_KEY` is deliberately absent from this stack — the demo serves precomputed triage suggestions only (D33).
 2. **Trigger stack** (`trigger`): the official self-host compose — webapp, supervisor, its own Postgres/Redis/ClickHouse, registry — **only if Stage 4 is delayed**; the plan of record is to stay on Trigger.dev Cloud until k3s.
 
 Deploys: GitHub Actions builds images → GHCR → SSH to the box → `docker compose pull && docker compose up -d` (until CI exists, `--build` on the box does the same job).

@@ -1,32 +1,36 @@
 # Deploying the demo
 
 The app stack from topology §Stage 3: `postgres` → one-shot `migrate` gate →
-`api`, with `cloudflared` (profile `public`) as the only public exposure. The
-dashboard (`apps/web`) joins this stack when it exists; until then the api is
-the deployed surface.
+`api` → `web`, with `cloudflared` (profile `public`) as the only public
+exposure. The dashboard reads the api over the stack network (D34); the api
+stays public separately as the curl-able surface (D37).
 
 ## Local smoke test
 
 ```bash
 cd deploy
 cp .env.example .env            # set the passwords; TUNNEL_TOKEN not needed locally
-docker compose up -d --build    # builds the image from the repo root
+docker compose up -d --build    # builds api (Dockerfile) + web (Dockerfile.web) from the repo root
 curl -s http://127.0.0.1:3001/healthz   # → {"ok":true}
+curl -so /dev/null -w "%{http_code}" http://127.0.0.1:3000/login   # → 200
 ```
 
 ## On the box (per-project dir convention)
 
 ```bash
-# once: copy deploy/{docker-compose.yml,.env.example} to ~/docker/tieout/, fill .env
-cd ~/docker/tieout
+# once: git clone the repo to ~/docker/tieout, fill deploy/.env
+cd ~/docker/tieout/deploy
 docker compose --profile public up -d --build
-curl -s https://tieout.jorgejim.com/healthz
+curl -s https://tieout-api.jorgejim.com/healthz
+curl -so /dev/null -w "%{http_code}" https://tieout.jorgejim.com
 ```
 
-The Cloudflare tunnel token (`TUNNEL_TOKEN`) comes from creating a tunnel with a
-`tieout.jorgejim.com → http://api:3001` route; add rate limiting on the
-Cloudflare side. Update `TIEOUT_IMAGE` in `.env` once CI publishes images to
-GHCR — then deploys become `docker compose pull && docker compose up -d`.
+The Cloudflare tunnel token (`TUNNEL_TOKEN`) names the stack's tunnel; its
+public hostnames are `tieout.jorgejim.com → http://web:3000` and
+`tieout-api.jorgejim.com → http://api:3001` (D37 — sibling subdomains,
+Universal SSL covers one level only). Add rate limiting on the Cloudflare
+side. Update `TIEOUT_IMAGE`/`TIEOUT_WEB_IMAGE` in `.env` once CI publishes
+images to GHCR — then deploys become `docker compose pull && docker compose up -d`.
 
 ## Seeding the demo data
 

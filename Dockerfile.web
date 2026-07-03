@@ -1,0 +1,29 @@
+# The dashboard image (topology §Stage 3): Next.js standalone output — the
+# build stage needs dev deps (next/tailwind/typescript), the runtime stage
+# ships only the traced server bundle. Every page fetch is `no-store`, so
+# `next build` never talks to the api; API_BASE_URL is read at request time.
+#
+#   docker build -f Dockerfile.web -t tieout-web .
+#   docker run -e API_BASE_URL=http://api:3001 tieout-web   # web on :3000
+
+FROM node:22-alpine AS build
+RUN corepack enable
+WORKDIR /app
+# turbo.json is needed even though turbo doesn't run here: next build lints
+# with turbo/no-undeclared-env-vars, which reads the declared env list from it.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY apps ./apps
+COPY packages ./packages
+RUN pnpm install --frozen-lockfile --filter @tieout/web...
+RUN pnpm --filter @tieout/web build
+
+FROM node:22-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+# Standalone output mirrors the monorepo layout; static assets are served by
+# the same server and must sit next to the traced bundle.
+COPY --from=build /app/apps/web/.next/standalone ./
+COPY --from=build /app/apps/web/.next/static ./apps/web/.next/static
+ENV PORT=3000 HOSTNAME=0.0.0.0
+EXPOSE 3000
+CMD ["node", "apps/web/server.js"]

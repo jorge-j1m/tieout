@@ -71,8 +71,32 @@ services:
       timeout: 5s
       retries: 5
 
-  # tieout.jorgejim.com → api, via an outbound-only tunnel. Route + rate limiting
-  # are configured on the Cloudflare side; the token names this stack's tunnel.
+  # The dashboard. Reads the api server-side over the compose network (D34) —
+  # browsers never call the api directly, so `api` needs no public route for
+  # the dashboard to work; it stays public separately as the curl-able surface.
+  web:
+    image: ${TIEOUT_WEB_IMAGE:-tieout-web}
+    build:
+      context: ..
+      dockerfile: Dockerfile.web
+    restart: unless-stopped
+    environment:
+      API_BASE_URL: http://api:3001
+      SESSION_COOKIE_SECURE: "true"
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/login"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # tieout.jorgejim.com → web, tieout-api.jorgejim.com → api, via an
+  # outbound-only tunnel. Routes + rate limiting are configured on the
+  # Cloudflare side; the token names this stack's tunnel.
   cloudflared:
     image: cloudflare/cloudflared:latest
     profiles: ["public"]
@@ -83,6 +107,8 @@ services:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
     depends_on:
       api:
+        condition: service_healthy
+      web:
         condition: service_healthy
 
 volumes:
