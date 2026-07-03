@@ -70,10 +70,16 @@ explains, it never edits the books (the product's first promise).
 - [ ] A fresh visitor reaches the public URL, lands read-only on Mercadia data, and
       can follow one break from the worklist down to its raw payload without help.
 - [x] Every mutation endpoint rejects the demo persona — proven by API tests, not UI.
-- [ ] An operator logs in, resolves an exception with a reason, and the append-only
-      event history shows it; a Stage 2 re-evaluation reopens it visibly.
-- [ ] Run-vs-run diff correctly classifies appeared / self-resolved / reopened breaks
-      (asserted against a seeded restatement scenario).
+- [x] An operator logs in, resolves an exception with a reason, and the append-only
+      event history shows it; a Stage 2 re-evaluation reopens it visibly. *(Login →
+      httpOnly session (D36); resolve requires a reason and forwards the token to the
+      API, which appends the immutable event; the case timeline and the Reopened tab
+      surface the D30 lifecycle. Demo persona sees the controls inert — the guard is
+      server-side.)*
+- [x] Run-vs-run diff correctly classifies appeared / self-resolved / reopened breaks
+      (asserted against a seeded restatement scenario). *(API test
+      "diffs a run from the persisted exception lifecycle"; the Run Detail Diff tab
+      renders the three sections.)*
 - [ ] `git push` to main deploys: images built in CI, box pulls, migrate gate runs
       before app start; rollback is `compose pull` of the previous tag.
 - [ ] Demo data resets on schedule; two visitors a day apart see the same story.

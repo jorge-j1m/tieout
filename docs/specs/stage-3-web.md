@@ -1,9 +1,20 @@
 # Spec: Stage 3 — `apps/web`, the dashboard
 
-> **Status: ACTIVE.** A focused companion to `stage-3.md` §2. That spec named the
-> dashboard; this one says how it is built. `apps/api` (D32/D33) is done and is
-> the only data source. When the web app ships, fold the essentials back into
-> `stage-3.md` and retire this file to the record.
+> **Status: DONE.** All build phases (0–5) shipped; `turbo run typecheck lint test`
+> green and a Playwright e2e smoke walks the demo path over the real stack. Decisions
+> D34–D36 are recorded and the docs pass is complete. Kept as the record of how the
+> dashboard was built.
+>
+> **As built — deviations from the first plan, code being reality:** the sources
+> endpoint is global `GET /sources` (sources aren't run-scoped), not `/runs/:id/sources`;
+> the run's config was already inside `stats`, so Run Detail reads it there rather than
+> via a separate query; `GET /runs/:id/matches` joins each member to its transaction
+> version (so the Matches tab names both sides with no N+1), `/exceptions` gained
+> worklist enrichment (subject amount/id, last actor, `reopened`), and `/quarantine`
+> joins the offending file's `externalRef`. Per review feedback the brittle
+> class-assertion RTL tests were dropped in favour of pure-logic tests (money, presenter,
+> overview, quarantine, the mutation actions) plus typecheck, live render, and the e2e
+> smoke; `EvidenceSpine` and `TriageMargin` render tests were kept.
 
 **Goal.** Turn the permanent record into something a stranger can *see*. A demo
 visitor lands read-only on Mercadia, follows one break from the worklist down to

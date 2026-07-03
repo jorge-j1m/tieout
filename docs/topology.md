@@ -4,7 +4,7 @@ How the system runs, stage by stage. The repo deploys to a single Ubuntu box ("t
 
 ## Environments
 
-- **dev** — code runs on the box via `pnpm dev` (`trigger.dev dev` executes tasks locally against Trigger.dev Cloud's orchestration; dev runs are not billed). Postgres + MinIO from the compose file below.
+- **dev** — code runs on the box via `pnpm dev` (`trigger.dev dev` executes tasks locally against Trigger.dev Cloud's orchestration; dev runs are not billed). Postgres + MinIO from the compose file below. The read/serve tier runs on the host too: `apps/api` (Hono) on `:3001` and `apps/web` (Next.js) on `:3000`, the dashboard reading the API over `API_BASE_URL` (D34).
 - **prod (Stage 3+)** — same box, containers built by CI, tasks deployed to Trigger.dev (Cloud until Stage 4).
 
 ## Compose (current, Stages 1–2)
@@ -77,6 +77,8 @@ STRIPE_LIVE_LANDING=                # =1 makes the hourly land-stripe poll the r
 SLACK_WEBHOOK_URL=                  # run summaries / failures
 API_OPERATOR_TOKENS=                # named operator bearer tokens "ana:t1,leo:t2" (D32)
 API_PORT=3001                       # apps/api listen port
+API_BASE_URL=http://127.0.0.1:3001  # apps/web → apps/api base URL (D34)
+SESSION_COOKIE_SECURE=              # =true forces the operator session cookie's Secure flag (behind https); default: on in production (D36)
 TIEOUT_TRIAGE_ENABLED=              # =true turns on LLM triage (D33); off = zero LLM calls anywhere
 TIEOUT_TRIAGE_API_KEY=              # triage only; never in the app-stack containers
 TIEOUT_TRIAGE_BASE_URL=             # any OpenAI-compatible /v1 root; default is Anthropic's compat endpoint
