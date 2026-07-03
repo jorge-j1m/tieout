@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { MiddlewareHandler } from "hono";
-import { and, asc, desc, eq, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import {
   acknowledgeBodySchema,
@@ -14,7 +14,10 @@ import {
   breaks,
   exceptionEvents,
   exceptions,
+  fxRates,
   ingestionBatches,
+  matches,
+  matchMembers,
   quarantinedRecords,
   rawRecords,
   reconRuns,
@@ -73,6 +76,9 @@ export function createApp({ db, operatorTokens }: ApiOptions): Hono<Env> {
 
   app.get("/healthz", () => json({ ok: true }));
 
+  /** Who the caller is — `null` for the demo persona. Powers the web login + persona chip. */
+  app.get("/me", (c) => json({ operator: operatorFor(operatorTokens, c.req.header("authorization")) }));
+
   // ── Runs ──────────────────────────────────────────────────────────────────
 
   app.get("/runs", async (c) => {
@@ -90,7 +96,22 @@ export function createApp({ db, operatorTokens }: ApiOptions): Hono<Env> {
     const id = idParam(c);
     if (id === null) return notFound();
     const [run] = await db.select().from(reconRuns).where(eq(reconRuns.id, id));
-    return run === undefined ? notFound() : json(run);
+    if (run === undefined) return notFound();
+    // The rates available to the run on its as-of day (D7) — so "the rate is the
+    // suspect" on an fx_drift break is provable, not asserted. Money/rates as strings.
+    const asOfDate = run.asOf.toISOString().slice(0, 10);
+    const rates = await db
+      .select({
+        base: fxRates.base,
+        quote: fxRates.quote,
+        rate: fxRates.rate,
+        rateSource: fxRates.rateSource,
+        rateDate: fxRates.rateDate,
+      })
+      .from(fxRates)
+      .where(eq(fxRates.rateDate, asOfDate))
+      .orderBy(asc(fxRates.base), asc(fxRates.quote));
+    return json({ ...run, config: { fxRates: rates } });
   });
 
   /**
@@ -142,7 +163,55 @@ export function createApp({ db, operatorTokens }: ApiOptions): Hono<Env> {
     return json(rows);
   });
 
+  /**
+   * A run's matches with their members (Run Detail "Matches" tab). Members are
+   * loaded set-based and grouped in memory — never a query per match.
+   */
+  app.get("/runs/:id/matches", async (c) => {
+    const id = idParam(c);
+    if (id === null) return notFound();
+    const [run] = await db.select().from(reconRuns).where(eq(reconRuns.id, id));
+    if (run === undefined) return notFound();
+    const rows = await db
+      .select()
+      .from(matches)
+      .where(eq(matches.runId, id))
+      .orderBy(asc(matches.kind), asc(matches.createdAt));
+    const memberRows =
+      rows.length === 0
+        ? []
+        : await db
+            .select({
+              matchId: matchMembers.matchId,
+              transactionId: matchMembers.transactionId,
+              transactionVersion: matchMembers.transactionVersion,
+            })
+            .from(matchMembers)
+            .where(
+              inArray(
+                matchMembers.matchId,
+                rows.map((r) => r.id),
+              ),
+            );
+    const byMatch = new Map<string, { transactionId: string; transactionVersion: number }[]>();
+    for (const m of memberRows) {
+      const member = { transactionId: m.transactionId, transactionVersion: m.transactionVersion };
+      const list = byMatch.get(m.matchId);
+      if (list) list.push(member);
+      else byMatch.set(m.matchId, [member]);
+    }
+    return json(rows.map((r) => ({ ...r, members: byMatch.get(r.id) ?? [] })));
+  });
+
   // ── Transactions and raw drill-down (the §8 explain chain) ────────────────
+
+  /** One break with its full details — the explain view is entered by break id. */
+  app.get("/breaks/:id", async (c) => {
+    const id = idParam(c);
+    if (id === null) return notFound();
+    const [row] = await db.select().from(breaks).where(eq(breaks.id, id));
+    return row === undefined ? notFound() : json(row);
+  });
 
   app.get("/transactions/:id", async (c) => {
     const id = idParam(c);
@@ -186,6 +255,50 @@ export function createApp({ db, operatorTokens }: ApiOptions): Hono<Env> {
     return json(rows);
   });
 
+  /**
+   * Per-source landing summary (Overview sources strip, Run Detail landing table):
+   * record and batch counts, last-landed time, quarantined units. Three grouped
+   * aggregates merged in memory — set-based, no per-source queries. Sources aren't
+   * run-scoped (batches land independently of runs), so this is a global snapshot.
+   */
+  app.get("/sources", async () => {
+    const [batchAgg, rawAgg, quarAgg] = await Promise.all([
+      db
+        .select({
+          source: ingestionBatches.source,
+          batches: sql<number>`count(*)::int`,
+          lastLanded: sql<Date | null>`max(${ingestionBatches.observedAt})`,
+        })
+        .from(ingestionBatches)
+        .groupBy(ingestionBatches.source),
+      db
+        .select({ source: rawRecords.source, records: sql<number>`count(*)::int` })
+        .from(rawRecords)
+        .groupBy(rawRecords.source),
+      db
+        .select({
+          source: quarantinedRecords.source,
+          quarantinedUnits: sql<number>`count(distinct ${quarantinedRecords.batchId})::int`,
+        })
+        .from(quarantinedRecords)
+        .groupBy(quarantinedRecords.source),
+    ]);
+    const batchBySource = new Map(batchAgg.map((b) => [b.source, b]));
+    const recordsBySource = new Map(rawAgg.map((r) => [r.source, r.records]));
+    const quarBySource = new Map(quarAgg.map((q) => [q.source, q.quarantinedUnits]));
+    const names = [
+      ...new Set([...batchBySource.keys(), ...recordsBySource.keys(), ...quarBySource.keys()]),
+    ].sort();
+    const sources = names.map((source) => ({
+      source,
+      records: recordsBySource.get(source) ?? 0,
+      batches: batchBySource.get(source)?.batches ?? 0,
+      lastLanded: batchBySource.get(source)?.lastLanded ?? null,
+      quarantinedUnits: quarBySource.get(source) ?? 0,
+    }));
+    return json(sources);
+  });
+
   // ── Exceptions: the worklist and its only mutations ───────────────────────
 
   app.get("/exceptions", async (c) => {
@@ -198,7 +311,29 @@ export function createApp({ db, operatorTokens }: ApiOptions): Hono<Env> {
       .where(where)
       .orderBy(desc(exceptions.updatedAt), asc(exceptions.fingerprint))
       .limit(query.data.limit);
-    return json(rows);
+    // "seen in N runs" (D18): distinct runs that reported the underlying break —
+    // the run-driven opened/reopened events. One grouped query, merged in memory.
+    const seenRows =
+      rows.length === 0
+        ? []
+        : await db
+            .select({
+              exceptionId: exceptionEvents.exceptionId,
+              seenInRuns: sql<number>`count(distinct ${exceptionEvents.runId})::int`,
+            })
+            .from(exceptionEvents)
+            .where(
+              and(
+                inArray(
+                  exceptionEvents.exceptionId,
+                  rows.map((r) => r.id),
+                ),
+                inArray(exceptionEvents.kind, ["opened", "reopened"]),
+              ),
+            )
+            .groupBy(exceptionEvents.exceptionId);
+    const seenByException = new Map(seenRows.map((s) => [s.exceptionId, s.seenInRuns]));
+    return json(rows.map((r) => ({ ...r, seenInRuns: seenByException.get(r.id) ?? 0 })));
   });
 
   app.get("/exceptions/:id", async (c) => {
@@ -222,7 +357,12 @@ export function createApp({ db, operatorTokens }: ApiOptions): Hono<Env> {
       .from(triageSuggestions)
       .where(eq(triageSuggestions.exceptionId, id))
       .orderBy(desc(triageSuggestions.createdAt), asc(triageSuggestions.id));
-    return json({ ...exception, currentBreak, events, triageSuggestions: triage });
+    const seenInRuns = new Set(
+      events
+        .filter((e) => e.runId !== null && (e.kind === "opened" || e.kind === "reopened"))
+        .map((e) => e.runId),
+    ).size;
+    return json({ ...exception, seenInRuns, currentBreak, events, triageSuggestions: triage });
   });
 
   /** Run a guarded workflow transition and return the updated exception. */

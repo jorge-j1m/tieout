@@ -5,7 +5,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   breaks,
   exceptions,
+  fxRates,
   ingestionBatches,
+  matches,
+  matchMembers,
   quarantinedRecords,
   rawRecords,
   reconRuns,
@@ -307,5 +310,85 @@ describe("api: demo persona reads, operators mutate exceptions", () => {
       confidence: "high",
       suggestedAction: "Re-check after the next ledger export.",
     });
+  });
+
+  // ── Stage-3 web read endpoints ──────────────────────────────────────────────
+
+  it("GET /me resolves both personas", async () => {
+    expect(await (await app.request("/me")).json()).toEqual({ operator: null });
+    const asOperator = await app.request("/me", { headers: OPERATOR });
+    expect(await asOperator.json()).toEqual({ operator: "ana" });
+  });
+
+  it("GET /breaks/:id returns one break with its details; 404s the unknown", async () => {
+    const [aBreak] = await client.db.select().from(breaks).where(eq(breaks.runId, run1));
+    const res = await app.request(`/breaks/${aBreak!.id}`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { id: string; details: { txns: unknown[] } };
+    expect(body.id).toBe(aBreak!.id);
+    expect(Array.isArray(body.details.txns)).toBe(true);
+    expect((await app.request(`/breaks/${randomUUID()}`)).status).toBe(404);
+    expect((await app.request("/breaks/not-a-uuid")).status).toBe(404);
+  });
+
+  it("GET /runs/:id/matches groups members under each match", async () => {
+    const [match] = await client.db
+      .insert(matches)
+      .values({ runId: run1, rulesetVersion: "ruleset-v2", kind: "exact_reference", details: { reference: "ch_x" } })
+      .returning({ id: matches.id });
+    await client.db
+      .insert(matchMembers)
+      .values({ matchId: match!.id, runId: run1, transactionId: currentTxnId, transactionVersion: 2 });
+
+    const res = await app.request(`/runs/${run1}/matches`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      kind: string;
+      members: { transactionId: string; transactionVersion: number }[];
+    }[];
+    expect(body).toHaveLength(1);
+    expect(body[0]!.kind).toBe("exact_reference");
+    expect(body[0]!.members).toEqual([{ transactionId: currentTxnId, transactionVersion: 2 }]);
+    expect((await app.request(`/runs/${randomUUID()}/matches`)).status).toBe(404);
+  });
+
+  it("GET /sources summarizes records, batches, and quarantined units per source", async () => {
+    const rows = (await (await app.request("/sources")).json()) as {
+      source: string;
+      records: number;
+      batches: number;
+      quarantinedUnits: number;
+      lastLanded: string | null;
+    }[];
+    const ledger = rows.find((r) => r.source === "ledger")!;
+    expect(ledger).toMatchObject({ records: 2, batches: 1, quarantinedUnits: 0 });
+    expect(ledger.lastLanded).not.toBeNull();
+    expect(rows.find((r) => r.source === "pagolat")!.quarantinedUnits).toBe(1);
+  });
+
+  it("GET /runs/:id carries the FX rates recorded for its as-of day", async () => {
+    await client.db
+      .insert(fxRates)
+      .values({ base: "MXN", quote: "USD", rate: "0.0588", rateSource: "seed", rateDate: "2026-06-01" });
+    const body = (await (await app.request(`/runs/${run1}`)).json()) as {
+      config: { fxRates: { base: string; quote: string; rate: string }[] };
+    };
+    expect(body.config.fxRates).toContainEqual(
+      expect.objectContaining({ base: "MXN", quote: "USD", rate: "0.0588" }),
+    );
+  });
+
+  it("computes seenInRuns on the worklist and the detail", async () => {
+    // No status filter: earlier tests already walked this exception to `resolved`.
+    const list = (await (await app.request("/exceptions")).json()) as {
+      id: string;
+      seenInRuns: number;
+    }[];
+    const open = list.find((e) => e.id === openExceptionId)!;
+    expect(open.seenInRuns).toBe(1);
+    const detail = (await (await app.request(`/exceptions/${openExceptionId}`)).json()) as {
+      seenInRuns: number;
+    };
+    expect(detail.seenInRuns).toBe(1);
   });
 });
