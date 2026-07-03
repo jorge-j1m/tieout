@@ -65,9 +65,10 @@ export const getQuarantine = cache((limit = 50) =>
 );
 
 export const getExceptions = cache(
-  (opts: { status?: ExceptionStatus; limit?: number } = {}) => {
+  (opts: { status?: ExceptionStatus; fingerprint?: string; limit?: number } = {}) => {
     const params = new URLSearchParams({ limit: String(opts.limit ?? 200) });
     if (opts.status !== undefined) params.set("status", opts.status);
+    if (opts.fingerprint !== undefined) params.set("fingerprint", opts.fingerprint);
     return fetchJson(`/exceptions?${params}`, exceptionsSchema);
   },
 );
@@ -78,13 +79,12 @@ export const getException = cache((id: string) =>
 
 /**
  * The case tracking a break, found by the shared fingerprint (exceptions key on
- * it, D18). The worklist is small, so one list + a find beats a bespoke lookup
- * endpoint; `cache()` collapses repeat calls within a render.
+ * it, D18) — one indexed lookup, then the detail read. This runs on every
+ * break-explain view, so it must not scale with the worklist's size.
  */
 export const getExceptionByFingerprint = cache(async (fingerprint: string | null) => {
   if (fingerprint === null) return null;
-  const all = await getExceptions();
-  const match = all.find((e) => e.fingerprint === fingerprint);
+  const [match] = await getExceptions({ fingerprint, limit: 1 });
   return match !== undefined ? getException(match.id) : null;
 });
 

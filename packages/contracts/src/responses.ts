@@ -25,7 +25,12 @@ export const moneyStringSchema = z
   .regex(/^-?\d+$/, "money must be integer minor units serialized as a string");
 
 /** An ISO-8601 UTC instant. Rendered UTC-explicit; never parsed into local time for display. */
-const iso = z.string();
+/**
+ * Instants must be ISO-8601 UTC. Validated, not assumed: a driver or SQL change
+ * that emits another format (it happened — Postgres `to_char` text) must fail
+ * here at the boundary, not render as `NaN` in a page's date formatter.
+ */
+const iso = z.iso.datetime();
 /** A free-form jsonb object (metadata, details, control totals). */
 const jsonObject = z.record(z.string(), z.unknown());
 
@@ -282,6 +287,8 @@ export const triageSuggestionSchema = z.object({
 });
 
 export const exceptionDetailSchema = exceptionSchema.extend({
+  /** Same lifecycle fact the worklist rows carry — computed once, by the API. */
+  reopened: z.boolean(),
   currentBreak: breakSchema.nullable(),
   events: z.array(exceptionEventSchema),
   triageSuggestions: z.array(triageSuggestionSchema),

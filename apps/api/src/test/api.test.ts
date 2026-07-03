@@ -253,6 +253,12 @@ describe("api: demo persona reads, operators mutate exceptions", () => {
     expect(open.lastActor).toBe("system"); // only the run-driven "opened" event so far
     expect(open.reopened).toBe(false);
     expect(open).toMatchObject({ amountMinor: "6681", currency: "USD", subjectId: "txn_x" });
+
+    // Fingerprint lookup: exceptions are fingerprint-keyed cases (D18/D30).
+    const byFp = (await (await app.request("/exceptions?fingerprint=fp_b")).json()) as { id: string }[];
+    expect(byFp.map((e) => e.id)).toEqual([openExceptionId]);
+    const none = (await (await app.request("/exceptions?fingerprint=nope")).json()) as unknown[];
+    expect(none).toEqual([]);
   });
 
   it("rejects every mutation from the demo persona — no token, bad token", async () => {
@@ -292,10 +298,12 @@ describe("api: demo persona reads, operators mutate exceptions", () => {
     const detail = (await (await app.request(`/exceptions/${openExceptionId}`)).json()) as {
       events: { kind: string; actor: string; note: string | null }[];
       currentBreak: { fingerprint: string };
+      reopened: boolean;
     };
     expect(detail.events.map((e) => e.kind)).toEqual(["opened", "acknowledged", "resolved"]);
     expect(detail.events.at(-1)).toMatchObject({ actor: "ana", note: "fee booked manually" });
     expect(detail.currentBreak.fingerprint).toBe("fp_b");
+    expect(detail.reopened).toBe(false); // resolved — not an open case that came back
   });
 
   it("attaches triage suggestions to the exception detail — read-only annotations (D33)", async () => {

@@ -342,11 +342,15 @@ export function createApp({ db, operatorTokens }: ApiOptions): Hono<Env> {
   app.get("/exceptions", async (c) => {
     const query = exceptionsQuerySchema.safeParse(c.req.query());
     if (!query.success) return badRequest(query.error.issues);
-    const where = query.data.status !== undefined ? eq(exceptions.status, query.data.status) : undefined;
+    const filters: SQL[] = [];
+    if (query.data.status !== undefined) filters.push(eq(exceptions.status, query.data.status));
+    if (query.data.fingerprint !== undefined) {
+      filters.push(eq(exceptions.fingerprint, query.data.fingerprint));
+    }
     const rows = await db
       .select()
       .from(exceptions)
-      .where(where)
+      .where(filters.length > 0 ? and(...filters) : undefined)
       .orderBy(desc(exceptions.updatedAt), asc(exceptions.fingerprint))
       .limit(query.data.limit);
     if (rows.length === 0) return json([]);
@@ -437,7 +441,10 @@ export function createApp({ db, operatorTokens }: ApiOptions): Hono<Env> {
         .filter((e) => e.runId !== null && (e.kind === "opened" || e.kind === "reopened"))
         .map((e) => e.runId),
     ).size;
-    return json({ ...exception, seenInRuns, currentBreak, events, triageSuggestions: triage });
+    // Same lifecycle fact the worklist rows carry (open case that came back after
+    // a resolution) — computed here so no client re-derives the rule.
+    const reopened = exception.status === "open" && events.some((e) => e.kind === "reopened");
+    return json({ ...exception, seenInRuns, reopened, currentBreak, events, triageSuggestions: triage });
   });
 
   /** Run a guarded workflow transition and return the updated exception. */
