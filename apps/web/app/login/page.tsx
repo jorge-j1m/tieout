@@ -1,12 +1,20 @@
-import { SectionLabel } from "@/components/primitives/SectionLabel";
-import { Shell } from "@/components/primitives/Shell";
+import { LoginForm } from "@/components/chrome/LoginForm";
 
-/** Stub — replaced by the real view in its build phase (see docs/specs/stage-3-web.md). */
-export default function Page() {
+export const metadata = { title: "Operator login" };
+
+/**
+ * Operator sign-in. Reconciliation is read-open to everyone; only the people who
+ * work exceptions need an account, and the form makes that plain. The demo
+ * persona reaches every page without ever landing here.
+ */
+export default function LoginPage() {
   return (
-    <Shell className="py-14">
-      <SectionLabel>Operator login</SectionLabel>
-      <p className="mt-3 text-sm text-muted">This view arrives with a later build phase.</p>
-    </Shell>
+    <div className="flex flex-col items-center px-6 py-20">
+      <LoginForm />
+      <p className="mt-7 max-w-[360px] text-center text-[11.5px] italic text-muted">
+        Tieout observes and explains. It never moves money, never edits your books, and never
+        guesses.
+      </p>
+    </div>
   );
 }

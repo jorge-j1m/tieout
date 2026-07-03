@@ -1,15 +1,18 @@
 import Link from "next/link";
 import { DoubleRule } from "@/components/primitives/DoubleRule";
 import { Shell } from "@/components/primitives/Shell";
+import { getPersona } from "@/lib/session";
 import { CommandSearch } from "./CommandSearch";
 import { NavLinks } from "./NavLinks";
+import { PersonaMenu } from "./PersonaMenu";
 
 /**
  * Global chrome: wordmark (its underline is the double rule — final, tied out),
- * primary nav, ⌘K, and the persona chip. The chip is a static demo label until
- * the operator session lands (Phase 3 wires the real persona).
+ * primary nav, ⌘K, and the persona chip. The chip reflects the real session
+ * resolved server-side (D36), so it can never claim an operator the API wouldn't.
  */
-export function TopBar() {
+export async function TopBar() {
+  const { operator } = await getPersona();
   return (
     <header className="border-b border-hair bg-paper">
       <Shell>
@@ -28,13 +31,7 @@ export function TopBar() {
           </div>
           <div className="flex items-center gap-2 md:gap-3.5">
             <CommandSearch />
-            <Link
-              href="/login"
-              className="rounded-[2px] border border-hair bg-paper px-3 py-1.5 text-[13px] text-ink no-underline hover:border-ink"
-            >
-              <span className="hidden md:inline">CFO · read-only demo</span>
-              <span className="md:hidden">Demo</span>
-            </Link>
+            <PersonaMenu operator={operator} />
           </div>
         </div>
         {/* mobile: nav scrolls beneath the bar */}
