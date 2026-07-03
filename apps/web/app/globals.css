@@ -79,3 +79,23 @@
     animation-delay: calc(var(--hop-index, 0) * 90ms);
   }
 }
+
+/*
+ * Loading skeletons are hairline rules that breathe — never gray blocks. The
+ * pulse is a quiet opacity sway; readers who ask for less see it hold still.
+ */
+@keyframes ledger-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.75;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton-pulse {
+    animation: ledger-pulse 1.5s ease-in-out infinite;
+  }
+}
