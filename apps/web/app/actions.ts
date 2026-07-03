@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getMe } from "@/lib/api/endpoints";
+import { sessionCookieSecure } from "@/lib/env";
 import { SESSION_COOKIE } from "@/lib/session";
 
 /**
@@ -11,12 +12,6 @@ import { SESSION_COOKIE } from "@/lib/session";
  * one runs on the server, so the operator token never reaches client JS and the
  * API re-checks it regardless.
  */
-
-/** Whether to mark the session cookie `secure` — on in production unless overridden. */
-function cookieSecure(): boolean {
-  const flag = process.env.SESSION_COOKIE_SECURE;
-  return flag !== undefined ? flag === "true" : process.env.NODE_ENV === "production";
-}
 
 export interface LoginState {
   error?: string;
@@ -33,18 +28,25 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
   const token = String(formData.get("token") ?? "").trim();
   if (token === "") return { error: "Enter your operator token." };
 
-  const me = await getMe(token).catch(() => null);
-  if (me === null || me.operator === null) {
+  // An unreachable API and a rejected token are different facts — never tell an
+  // operator their valid token is bad because the backend was down.
+  let operator: string | null;
+  try {
+    ({ operator } = await getMe(token));
+  } catch {
+    return { error: "Couldn’t reach the API to verify the token — try again in a moment." };
+  }
+  if (operator === null) {
     return { error: "That token isn’t a valid operator token." };
   }
-  if (name !== "" && name !== me.operator) {
-    return { error: `That token belongs to ${me.operator}, not “${name}”.` };
+  if (name !== "" && name !== operator) {
+    return { error: `That token belongs to ${operator}, not “${name}”.` };
   }
 
   const store = await cookies();
   store.set(SESSION_COOKIE, token, {
     httpOnly: true,
-    secure: cookieSecure(),
+    secure: sessionCookieSecure(),
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 8, // a working shift

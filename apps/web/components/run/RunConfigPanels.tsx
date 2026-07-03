@@ -1,7 +1,6 @@
 import type { RunConfig } from "@tieout/contracts";
 import { SectionLabel } from "@/components/primitives/SectionLabel";
 import { sourceLabel } from "@/lib/explain/labels";
-import { formatMoney } from "@/lib/money";
 
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
@@ -35,7 +34,9 @@ export function RunConfigPanels({ config }: { config: RunConfig }) {
     <div className="grid gap-x-12 gap-y-8 sm:grid-cols-2">
       <div>
         <SectionLabel className="mb-1">Tolerances</SectionLabel>
-        <Row term="Amount tolerance">{formatMoney(config.toleranceMinor, "USD")}</Row>
+        {/* The tolerance applies per compared currency pair, so it has no single
+            currency — state it in minor units rather than mislabel it. */}
+        <Row term="Amount tolerance">{config.toleranceMinor} minor units</Row>
         <Row term="Date window">±{formatSpan(config.windowMs)}</Row>
         {config.duplicateWindowMs !== null && (
           <Row term="Duplicate window">{formatSpan(config.duplicateWindowMs)}</Row>

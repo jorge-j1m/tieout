@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { acknowledgeCase, resolveCase, type MutationState } from "@/app/case-actions";
@@ -38,6 +39,7 @@ function CaseDialog({
   onClose: () => void;
 }) {
   const isResolve = kind === "resolve";
+  const pathname = usePathname();
   const [state, action] = useActionState<MutationState, FormData>(
     isResolve ? resolveCase : acknowledgeCase,
     {},
@@ -79,6 +81,8 @@ function CaseDialog({
         </p>
         <form action={action}>
           <input type="hidden" name="id" value={exceptionId} />
+          {/* The action revalidates the hosting page — this dialog also lives on /breaks/[id]. */}
+          <input type="hidden" name="path" value={pathname} />
           <textarea
             name={isResolve ? "reason" : "note"}
             value={text}

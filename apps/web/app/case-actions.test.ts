@@ -44,6 +44,19 @@ describe("case mutations", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("also revalidates the hosting page when the dialog lives elsewhere (the break rail)", async () => {
+    await acknowledgeCase({}, form({ id: "e1", path: "/breaks/b42" }));
+    expect(revalidatePath).toHaveBeenCalledWith("/breaks/b42");
+    // An /exceptions host is already covered by the standing revalidations.
+    revalidatePath.mockClear();
+    postJson.mockResolvedValue({ ok: true });
+    await acknowledgeCase({}, form({ id: "e1", path: "/exceptions/e1" }));
+    expect(revalidatePath.mock.calls.map((c: unknown[]) => c[0])).toEqual([
+      "/exceptions/e1",
+      "/exceptions",
+    ]);
+  });
+
   it("acknowledges with an optional note, omitted when blank", async () => {
     await acknowledgeCase({}, form({ id: "e1", note: "" }));
     expect(postJson).toHaveBeenCalledWith("/exceptions/e1/acknowledge", { note: undefined }, "supersecret");

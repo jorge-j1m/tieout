@@ -1,4 +1,4 @@
-import type { MatchWithMembers } from "@tieout/contracts";
+import { LEDGER_SOURCE, type MatchWithMembers } from "@tieout/contracts";
 import { Money } from "@/components/primitives/Money";
 import { Mono } from "@/components/primitives/Mono";
 import { StateChip } from "@/components/primitives/StateChip";
@@ -30,7 +30,7 @@ function fxRate(details: Record<string, unknown> | null): string | null {
 
 /** The ledger anchor and the external counterpart(s) a match tied together. */
 function sides(members: Member[]): { ledger: Member | undefined; external: Member[] } {
-  const ledger = members.find((m) => m.source === "ledger");
+  const ledger = members.find((m) => m.source === LEDGER_SOURCE);
   return { ledger, external: members.filter((m) => m !== ledger) };
 }
 
@@ -43,10 +43,18 @@ function externalLabel(external: Member[]): string {
 }
 
 /** The lines of a grouped match, each in its native currency, plus the tied net. */
-function GroupedMembers({ external, details }: { external: Member[]; details: Record<string, unknown> | null }) {
+function GroupedMembers({
+  external,
+  details,
+  netCurrency,
+}: {
+  external: Member[];
+  details: Record<string, unknown> | null;
+  /** The anchor's currency — the converted net is stated in it, never assumed. */
+  netCurrency: string | undefined;
+}) {
   const partsNet = str(details, "partsNetMinor");
   const rate = fxRate(details);
-  const ledgerCurrency = "USD";
   return (
     <div className="mt-3 border-l border-hair pl-4">
       {external.map((m) => (
@@ -55,12 +63,12 @@ function GroupedMembers({ external, details }: { external: Member[]; details: Re
           <Money minor={m.amountMinor} currency={m.currency} className="text-ink" />
         </div>
       ))}
-      {partsNet !== null && (
+      {partsNet !== null && netCurrency !== undefined && (
         <div className="mt-1.5 flex items-baseline justify-between gap-4 border-t border-hair pt-1.5 text-[13px]">
           <span className="text-muted">
             {external.length} lines net{rate !== null && <span> · at {rate}</span>}
           </span>
-          <Money minor={partsNet} currency={ledgerCurrency} className="text-ink" />
+          <Money minor={partsNet} currency={netCurrency} className="text-ink" />
         </div>
       )}
     </div>
@@ -106,7 +114,7 @@ function MatchRow({ match }: { match: MatchWithMembers }) {
         <div className="min-w-0 flex-1">{summary}</div>
       </summary>
       <div className="pb-4 pl-6">
-        <GroupedMembers external={external} details={match.details} />
+        <GroupedMembers external={external} details={match.details} netCurrency={ledger?.currency} />
       </div>
     </details>
   );

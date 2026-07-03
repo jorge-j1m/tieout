@@ -77,7 +77,7 @@ export function CommandSearch({ items = [] }: { items?: SearchItem[] }) {
                 autoFocus
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Jump to a run, break, exception, or transaction id…"
+                placeholder="Jump to a view…"
                 className="w-full bg-transparent text-[15px] text-ink outline-none placeholder:text-muted"
               />
             </div>
