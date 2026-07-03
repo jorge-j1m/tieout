@@ -1,5 +1,5 @@
 import type { BreakType, FxRateInput, ReconSummary, SourceAdapter } from "@tieout/contracts";
-import { BREAK_TYPES } from "@tieout/contracts";
+import { BREAK_TYPES, LEDGER_SOURCE } from "@tieout/contracts";
 import { reconcile, RULESET_VERSION, type MatchableTxn, type MatchingConfig } from "@tieout/core";
 import {
   advanceCursor,
@@ -86,8 +86,8 @@ export async function runRecon(db: Db, opts: ReconOptions): Promise<ReconSummary
   // Tombstoned versions are the source saying "this no longer exists" — they are
   // history, not matchable money.
   const live = rows.filter((t) => !t.isTombstone);
-  const ledger = live.filter((t) => t.source === "ledger").map(toMatchable);
-  const external = live.filter((t) => t.source !== "ledger").map(toMatchable);
+  const ledger = live.filter((t) => t.source === LEDGER_SOURCE).map(toMatchable);
+  const external = live.filter((t) => t.source !== LEDGER_SOURCE).map(toMatchable);
 
   // The run's rate set is whatever fx_rates holds at the watermark; the matcher
   // records what it applied (D29d).

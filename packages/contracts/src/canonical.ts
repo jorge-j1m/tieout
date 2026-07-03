@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+/**
+ * The source id the matching model treats as the books' side: every match pairs
+ * this source against the externals. One definition — the pipeline partitions on
+ * it, the ledger adapter emits it, and the dashboard names sides with it.
+ */
+export const LEDGER_SOURCE = "ledger";
+
 /** Canonical transaction types (D15). Source-native types map onto these; unmapped types quarantine. */
 export const CANONICAL_TXN_TYPES = [
   "payment",
