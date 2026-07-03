@@ -71,6 +71,28 @@ describe("response schemas", () => {
     expect(parsed.stats.matchedTransactions).toBe(119);
   });
 
+  it("tolerates an older run's leaner stats and derives totalBreaks from the histogram", () => {
+    const parsed = runSchema.parse({
+      id: "3032722a-0000-4000-8000-000000000000",
+      asOf: "2026-05-01T00:00:00.000Z",
+      rulesetVersion: "ruleset-v1",
+      status: "completed",
+      // an early-era stats blob: no pending, no config, no totalBreaks
+      stats: {
+        evaluatedTransactions: 100,
+        ledgerTransactions: 50,
+        matches: 40,
+        breaks: { missing_in_ledger: 3, amount_mismatch: 2 },
+      },
+      startedAt: "2026-05-01T00:00:00.000Z",
+      finishedAt: null,
+      createdAt: "2026-05-01T00:00:00.000Z",
+    });
+    expect(parsed.stats.totalBreaks).toBe(5);
+    expect(parsed.stats.config).toBeNull();
+    expect(parsed.stats.pending).toEqual([]);
+  });
+
   it("keeps money a string on transactions", () => {
     const parsed = transactionSchema.parse(txnRow);
     expect(typeof parsed.amountMinor).toBe("string");

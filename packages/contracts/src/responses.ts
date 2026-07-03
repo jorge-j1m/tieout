@@ -59,22 +59,33 @@ export const pendingRefSchema = z.object({
 });
 
 /**
- * `recon_runs.stats` — exactly what `apps/jobs` pipeline persists: the counts,
- * the breaks-by-type histogram (every type, including zeros), the pending set,
- * and the run's own config. This is the audit record of what the run evaluated.
+ * `recon_runs.stats` — what the `apps/jobs` pipeline persists: counts, the
+ * breaks-by-type histogram, the pending set, and the run's own config.
+ *
+ * Runs live forever and the shape has grown over time (D8 spirit), so the reader
+ * is deliberately liberal: fields absent on older runs default, and `totalBreaks`
+ * falls back to summing the histogram. Money and enums stay strict — tolerance is
+ * for shape evolution, never for a number arriving as the wrong type.
  */
-export const reconStatsSchema = z.object({
-  evaluatedTransactions: z.number().int(),
-  ledgerTransactions: z.number().int(),
-  externalTransactions: z.number().int(),
-  matches: z.number().int(),
-  matchedTransactions: z.number().int(),
-  breaks: z.record(z.string(), z.number().int()),
-  totalBreaks: z.number().int(),
-  pendingBySource: z.record(z.string(), z.number().int()),
-  pending: z.array(pendingRefSchema),
-  config: runConfigSchema,
-});
+export const reconStatsSchema = z
+  .object({
+    evaluatedTransactions: z.number().int().catch(0),
+    ledgerTransactions: z.number().int().catch(0),
+    externalTransactions: z.number().int().catch(0),
+    matches: z.number().int().catch(0),
+    matchedTransactions: z.number().int().catch(0),
+    breaks: z.record(z.string(), z.number().int()).catch({}),
+    totalBreaks: z.number().int().optional(),
+    pendingBySource: z.record(z.string(), z.number().int()).catch({}),
+    pending: z.array(pendingRefSchema).catch([]),
+    // Present-but-old configs simply read as null rather than failing the whole run.
+    config: runConfigSchema.nullish().catch(null),
+  })
+  .transform((s) => ({
+    ...s,
+    totalBreaks: s.totalBreaks ?? Object.values(s.breaks).reduce((n, v) => n + v, 0),
+    config: s.config ?? null,
+  }));
 
 export const runSchema = z.object({
   id: z.string(),
