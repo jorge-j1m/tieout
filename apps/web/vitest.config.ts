@@ -11,6 +11,10 @@ export default defineConfig({
     passWithNoTests: true,
   },
   resolve: {
-    alias: { "@": fileURLToPath(new URL(".", import.meta.url)) },
+    alias: {
+      "@": fileURLToPath(new URL(".", import.meta.url)),
+      // The real package throws outside React Server context; tests need it inert.
+      "server-only": fileURLToPath(new URL("./test/stubs/server-only.ts", import.meta.url)),
+    },
   },
 });
