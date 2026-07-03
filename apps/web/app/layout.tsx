@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import { Footer } from "@/components/chrome/Footer";
+import { TopBar } from "@/components/chrome/TopBar";
 import "./globals.css";
 
 /**
@@ -26,7 +28,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${plexSans.variable} ${plexMono.variable}`}>
-      <body className="min-h-screen bg-paper font-sans text-ink antialiased">{children}</body>
+      <body className="flex min-h-screen flex-col bg-paper font-sans text-ink antialiased">
+        <TopBar />
+        <div className="flex-1">{children}</div>
+        <Footer />
+      </body>
     </html>
   );
 }
