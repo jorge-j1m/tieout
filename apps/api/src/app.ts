@@ -264,9 +264,26 @@ export function createApp({ db, operatorTokens }: ApiOptions): Hono<Env> {
   app.get("/quarantine", async (c) => {
     const query = listQuerySchema.safeParse(c.req.query());
     if (!query.success) return badRequest(query.error.issues);
+    // Join the batch's external ref so the page can name the offending file
+    // ("pagolat-2026-05-24.csv") instead of an opaque uuid.
     const rows = await db
-      .select()
+      .select({
+        id: quarantinedRecords.id,
+        batchId: quarantinedRecords.batchId,
+        rawId: quarantinedRecords.rawId,
+        stage: quarantinedRecords.stage,
+        source: quarantinedRecords.source,
+        sourceAccount: quarantinedRecords.sourceAccount,
+        sourceId: quarantinedRecords.sourceId,
+        normalizerVersion: quarantinedRecords.normalizerVersion,
+        errors: quarantinedRecords.errors,
+        payload: quarantinedRecords.payload,
+        observedAt: quarantinedRecords.observedAt,
+        createdAt: quarantinedRecords.createdAt,
+        batchRef: ingestionBatches.externalRef,
+      })
       .from(quarantinedRecords)
+      .leftJoin(ingestionBatches, eq(quarantinedRecords.batchId, ingestionBatches.id))
       .orderBy(desc(quarantinedRecords.createdAt))
       .limit(query.data.limit);
     return json(rows);

@@ -1,12 +1,43 @@
+import { RunContextLine } from "@/components/chrome/RunContextLine";
+import { QuarantineCard } from "@/components/quarantine/QuarantineCard";
+import { DoubleRule } from "@/components/primitives/DoubleRule";
 import { SectionLabel } from "@/components/primitives/SectionLabel";
 import { Shell } from "@/components/primitives/Shell";
+import { getQuarantine, getRuns } from "@/lib/api/endpoints";
 
-/** Stub — replaced by the real view in its build phase (see docs/specs/stage-3-web.md). */
-export default function Page() {
+export const metadata = { title: "Quarantine" };
+
+/**
+ * The held records — input the engine refused to guess at. Each is preserved
+ * whole with the structured reason it was kept, so a human can reconcile the
+ * file with its own arithmetic. Quarantine is a worklist, not a trash can.
+ */
+export default async function QuarantinePage() {
+  const [held, runs] = await Promise.all([getQuarantine(), getRuns()]);
+  const latest = runs[0];
+
   return (
-    <Shell className="py-14">
-      <SectionLabel>Quarantine</SectionLabel>
-      <p className="mt-3 text-sm text-muted">This view arrives with a later build phase.</p>
-    </Shell>
+    <>
+      {latest !== undefined && (
+        <RunContextLine runId={latest.id} asOf={latest.asOf} ruleset={latest.rulesetVersion} />
+      )}
+      <Shell className="max-w-[960px] py-9 pb-16">
+        <SectionLabel>Quarantine</SectionLabel>
+        <p className="mt-2 text-sm italic text-muted">Quarantine is a worklist, not a trash can.</p>
+
+        {held.length > 0 ? (
+          <div className="mt-9 flex flex-col gap-14">
+            {held.map((row) => (
+              <QuarantineCard key={row.id} row={row} />
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center py-20 text-center">
+            <p className="text-lg text-ink">Nothing is held. Every record tied to its source.</p>
+            <DoubleRule className="mt-3 w-24" />
+          </div>
+        )}
+      </Shell>
+    </>
   );
 }

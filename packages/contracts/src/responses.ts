@@ -302,6 +302,8 @@ export const quarantineSchema = z.object({
   payload: z.unknown(),
   observedAt: iso,
   createdAt: iso,
+  /** The offending batch's external ref (file name), joined for a human identity. */
+  batchRef: z.string().nullable(),
 });
 
 export const sourceSummarySchema = z.object({

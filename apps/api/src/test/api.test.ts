@@ -228,10 +228,14 @@ describe("api: demo persona reads, operators mutate exceptions", () => {
     expect(body.batch.id).toBeDefined();
   });
 
-  it("lists quarantine for the demo persona", async () => {
-    const rows = (await (await app.request("/quarantine")).json()) as { stage: string }[];
+  it("lists quarantine for the demo persona, named by the offending file", async () => {
+    const rows = (await (await app.request("/quarantine")).json()) as {
+      stage: string;
+      batchRef: string | null;
+    }[];
     expect(rows).toHaveLength(1);
     expect(rows[0]!.stage).toBe("batch");
+    expect(rows[0]!.batchRef).toBe("api-test"); // joined from the ingestion batch
   });
 
   it("enriches the exceptions worklist with subject, seen-in-runs, and last actor", async () => {
