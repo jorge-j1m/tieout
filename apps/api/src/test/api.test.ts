@@ -343,11 +343,23 @@ describe("api: demo persona reads, operators mutate exceptions", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       kind: string;
-      members: { transactionId: string; transactionVersion: number }[];
+      members: { transactionId: string; transactionVersion: number; sourceId: string; amountMinor: string }[];
     }[];
     expect(body).toHaveLength(1);
     expect(body[0]!.kind).toBe("exact_reference");
-    expect(body[0]!.members).toEqual([{ transactionId: currentTxnId, transactionVersion: 2 }]);
+    // Members carry the joined transaction version, so the Matches tab can name both sides.
+    expect(body[0]!.members).toEqual([
+      {
+        transactionId: currentTxnId,
+        transactionVersion: 2,
+        source: "ledger",
+        sourceId: "LED-1",
+        amountMinor: "4890",
+        currency: "USD",
+        reference: null,
+        type: "payment",
+      },
+    ]);
     expect((await app.request(`/runs/${randomUUID()}/matches`)).status).toBe(404);
   });
 

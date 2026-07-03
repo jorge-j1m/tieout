@@ -1,4 +1,4 @@
-import type { BreakType } from "@tieout/contracts";
+import type { BreakType, MatchKind } from "@tieout/contracts";
 
 /**
  * The canonical plain-English glosses — verbatim from the design brief, used as
@@ -24,6 +24,13 @@ export const TYPE_LABEL: Record<BreakType, string> = {
   duplicate_candidate: "Duplicate candidate",
   unexpected_fee: "Unexpected fee",
   fx_drift: "FX drift",
+};
+
+/** How each match was made — the rule that tied the two sides together. */
+export const MATCH_KIND_LABEL: Record<MatchKind, string> = {
+  exact_reference: "Exact reference",
+  amount_date_window: "Amount + date",
+  grouped_reference: "Grouped reference",
 };
 
 const SOURCE_LABEL: Record<string, string> = {

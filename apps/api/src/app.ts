@@ -163,6 +163,8 @@ export function createApp({ db, operatorTokens }: ApiOptions): Hono<Env> {
       .from(matches)
       .where(eq(matches.runId, id))
       .orderBy(asc(matches.kind), asc(matches.createdAt));
+    // Join the matched transaction versions so the Matches tab can name the
+    // ledger and source sides without a query per member (set-based, no N+1).
     const memberRows =
       rows.length === 0
         ? []
@@ -171,20 +173,27 @@ export function createApp({ db, operatorTokens }: ApiOptions): Hono<Env> {
               matchId: matchMembers.matchId,
               transactionId: matchMembers.transactionId,
               transactionVersion: matchMembers.transactionVersion,
+              source: transactions.source,
+              sourceId: transactions.sourceId,
+              amountMinor: transactions.amountMinor,
+              currency: transactions.currency,
+              reference: transactions.reference,
+              type: transactions.type,
             })
             .from(matchMembers)
+            .innerJoin(transactions, eq(matchMembers.transactionId, transactions.id))
             .where(
               inArray(
                 matchMembers.matchId,
                 rows.map((r) => r.id),
               ),
             );
-    const byMatch = new Map<string, { transactionId: string; transactionVersion: number }[]>();
-    for (const m of memberRows) {
-      const member = { transactionId: m.transactionId, transactionVersion: m.transactionVersion };
-      const list = byMatch.get(m.matchId);
+    type Member = Omit<(typeof memberRows)[number], "matchId">;
+    const byMatch = new Map<string, Member[]>();
+    for (const { matchId, ...member } of memberRows) {
+      const list = byMatch.get(matchId);
       if (list) list.push(member);
-      else byMatch.set(m.matchId, [member]);
+      else byMatch.set(matchId, [member]);
     }
     return json(rows.map((r) => ({ ...r, members: byMatch.get(r.id) ?? [] })));
   });

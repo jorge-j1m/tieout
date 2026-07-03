@@ -208,6 +208,13 @@ export const rawWithBatchSchema = z.object({
 export const matchMemberSchema = z.object({
   transactionId: z.string(),
   transactionVersion: z.number().int(),
+  /** The matched transaction version, joined so the Matches tab can name both sides. */
+  source: z.string(),
+  sourceId: z.string(),
+  amountMinor: moneyStringSchema,
+  currency: z.string(),
+  reference: z.string().nullable(),
+  type: z.enum(CANONICAL_TXN_TYPES),
 });
 
 export const matchWithMembersSchema = z.object({
