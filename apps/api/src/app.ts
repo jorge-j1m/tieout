@@ -4,23 +4,30 @@ import { and, asc, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import {
   acknowledgeBodySchema,
+  appendInvestigationMessageBodySchema,
   breaksQuerySchema,
+  deleteInvestigationMessageBodySchema,
   exceptionsQuerySchema,
   listQuerySchema,
   resolveBodySchema,
 } from "@tieout/contracts";
 import {
   acknowledgeException,
+  appendInvestigationMessage,
   breaks,
+  countAssistantTurns24h,
   exceptionEvents,
   exceptions,
   ingestionBatches,
+  investigationMessages,
+  loadInvestigationThread,
   matches,
   matchMembers,
   quarantinedRecords,
   rawRecords,
   reconRuns,
   resolveException,
+  tombstoneInvestigationMessage,
   transactions,
   triageSuggestions,
   type Db,
@@ -38,7 +45,15 @@ export interface ApiOptions {
   db: Db;
   /** sha256(token) hex → operator name; see auth.ts. */
   operatorTokens: Map<string, string>;
+  /**
+   * Live investigation config (D38). The LLM key/model live in the web container,
+   * not here — the api only needs the gate: whether the feature is on, the daily
+   * assistant-turn cap, and the persona name it stamps on answers.
+   */
+  investigate?: { enabled: boolean; dailyCap: number; assistantName: string };
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Money is bigint minor units (D5) — it serializes as strings, never numbers. */
 const json = (data: unknown, status = 200): Response =>
@@ -76,8 +91,13 @@ function subjectOf(
 
 type Env = { Variables: { operator: string } };
 
-export function createApp({ db, operatorTokens }: ApiOptions): Hono<Env> {
+export function createApp({
+  db,
+  operatorTokens,
+  investigate: investigateOption,
+}: ApiOptions): Hono<Env> {
   const app = new Hono<Env>();
+  const investigate = { enabled: false, dailyCap: 10, assistantName: "Clara", ...investigateOption };
 
   /** Mutations are operator-only; the demo persona is rejected here, server-side. */
   const requireOperator: MiddlewareHandler<Env> = async (c, next) => {
@@ -97,8 +117,15 @@ export function createApp({ db, operatorTokens }: ApiOptions): Hono<Env> {
 
   app.get("/healthz", () => json({ ok: true }));
 
-  /** Who the caller is — `null` for the demo persona. Powers the web login + persona chip. */
-  app.get("/me", (c) => json({ operator: operatorFor(operatorTokens, c.req.header("authorization")) }));
+  /**
+   * Who the caller is — `null` for the demo persona. Powers the web login +
+   * persona chip. `investigate` tells the web to render the composer live vs
+   * inert without a probe: an operator, and the feature is on.
+   */
+  app.get("/me", (c) => {
+    const operator = operatorFor(operatorTokens, c.req.header("authorization"));
+    return json({ operator, investigate: operator !== null && investigate.enabled });
+  });
 
   // ── Runs ──────────────────────────────────────────────────────────────────
 
@@ -478,6 +505,80 @@ export function createApp({ db, operatorTokens }: ApiOptions): Hono<Env> {
     return transition(id, () =>
       resolveException(db, id, c.get("operator"), body.data.reason, new Date()),
     );
+  });
+
+  // ── Investigation: one shared thread per case (D38) ───────────────────────
+
+  /**
+   * The saved conversation for a case — open to every persona. Anonymous
+   * visitors read the record (zero live LLM calls); the streaming route handler
+   * reads it too, to build Clara's context. The thread is created lazily, so a
+   * case nobody has investigated yet returns an empty thread, not a 404.
+   */
+  app.get("/exceptions/:id/investigation", async (c) => {
+    const id = idParam(c);
+    if (id === null) return notFound();
+    const [exception] = await db.select({ id: exceptions.id }).from(exceptions).where(eq(exceptions.id, id));
+    if (exception === undefined) return notFound();
+    return json(await loadInvestigationThread(db, id));
+  });
+
+  /** The live-spend gate: assistant turns already spent in the last 24h vs the daily cap. */
+  app.get("/investigate/budget", async () => {
+    const usedLast24h = await countAssistantTurns24h(db, new Date(Date.now() - DAY_MS));
+    return json({
+      enabled: investigate.enabled,
+      cap: investigate.dailyCap,
+      usedLast24h,
+      remaining: Math.max(0, investigate.dailyCap - usedLast24h),
+    });
+  });
+
+  /**
+   * Append a turn to a case's investigation (operator-only). The API derives who
+   * wrote it — the operator for a question, the persona (Clara) for an answer —
+   * so a caller can never spoof authorship. Creates the thread on the first call.
+   */
+  app.post("/exceptions/:id/investigation/messages", requireOperator, async (c) => {
+    const id = idParam(c);
+    if (id === null) return notFound();
+    const [exception] = await db.select({ id: exceptions.id }).from(exceptions).where(eq(exceptions.id, id));
+    if (exception === undefined) return notFound();
+    const body = appendInvestigationMessageBodySchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!body.success) return badRequest(body.error.issues);
+    const operator = c.get("operator");
+    const message = await appendInvestigationMessage(db, {
+      exceptionId: id,
+      role: body.data.role,
+      authorName: body.data.role === "assistant" ? investigate.assistantName : operator,
+      actor: operator,
+      text: body.data.text,
+      parts: body.data.parts,
+      citations: body.data.citations,
+      toolTrail: body.data.toolTrail,
+      model: body.data.model ?? null,
+      promptVersion: body.data.promptVersion ?? null,
+      usage: body.data.usage ?? null,
+      supersedesId: body.data.supersedesId ?? null,
+      eventKind: body.data.eventKind,
+      now: new Date(),
+    });
+    return json(message, 201);
+  });
+
+  /** Tombstone a turn (operator-only): appends a `deleted` event; the row is never removed. */
+  app.post("/investigation/messages/:id/delete", requireOperator, async (c) => {
+    const id = idParam(c);
+    if (id === null) return notFound();
+    const [message] = await db
+      .select({ id: investigationMessages.id })
+      .from(investigationMessages)
+      .where(eq(investigationMessages.id, id));
+    if (message === undefined) return notFound();
+    const body = deleteInvestigationMessageBodySchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!body.success) return badRequest(body.error.issues);
+    await tombstoneInvestigationMessage(db, id, c.get("operator"), new Date(), body.data.note);
+    return json({ ok: true });
   });
 
   return app;

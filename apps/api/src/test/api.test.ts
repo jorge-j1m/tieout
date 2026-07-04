@@ -354,10 +354,10 @@ describe("api: demo persona reads, operators mutate exceptions", () => {
 
   // ── Stage-3 web read endpoints ──────────────────────────────────────────────
 
-  it("GET /me resolves both personas", async () => {
-    expect(await (await app.request("/me")).json()).toEqual({ operator: null });
+  it("GET /me resolves both personas; investigate is off without the feature", async () => {
+    expect(await (await app.request("/me")).json()).toEqual({ operator: null, investigate: false });
     const asOperator = await app.request("/me", { headers: OPERATOR });
-    expect(await asOperator.json()).toEqual({ operator: "ana" });
+    expect(await asOperator.json()).toEqual({ operator: "ana", investigate: false });
   });
 
   it("GET /breaks/:id returns one break with its details; 404s the unknown", async () => {
@@ -430,5 +430,179 @@ describe("api: demo persona reads, operators mutate exceptions", () => {
       seenInRuns: number;
     };
     expect(detail.seenInRuns).toBe(1);
+  });
+});
+
+describe("api: investigation thread (D38)", () => {
+  let client: TestDb;
+  let app: ReturnType<typeof createApp>;
+  let exceptionId: string;
+
+  beforeAll(async () => {
+    client = await connectTestDb();
+    const db = client.db;
+    await truncateAll(db);
+    app = createApp({
+      db,
+      operatorTokens: parseOperatorTokens("ana:supersecret"),
+      investigate: { enabled: true, dailyCap: 10, assistantName: "Clara" },
+    });
+    const [run] = await db
+      .insert(reconRuns)
+      .values({
+        asOf: T0,
+        rulesetVersion: "ruleset-v2",
+        status: "completed",
+        stats: {},
+        startedAt: T0,
+        finishedAt: T0,
+      })
+      .returning({ id: reconRuns.id });
+    await db.insert(breaks).values({
+      runId: run!.id,
+      type: "missing_in_ledger",
+      details: { txns: [{ sourceId: "txn_x", amountMinor: "6681", currency: "USD" }] },
+      fingerprint: "fp_inv",
+    });
+    await syncExceptionsForRun(db, run!.id, T0);
+    const [exc] = await db.select().from(exceptions);
+    exceptionId = exc!.id;
+  });
+
+  afterAll(async () => {
+    await client.close();
+  });
+
+  it("opens the saved thread to every persona but gates writes to operators", async () => {
+    // Lazily created: a case nobody has investigated returns an empty thread, not a 404.
+    const empty = await app.request(`/exceptions/${exceptionId}/investigation`);
+    expect(empty.status).toBe(200);
+    expect(await empty.json()).toEqual({ exceptionId, threadId: null, messages: [] });
+
+    // The demo persona can read but never write.
+    const append = await app.request(
+      post(`/exceptions/${exceptionId}/investigation/messages`, { role: "user", text: "hi" }),
+    );
+    expect(append.status).toBe(401);
+    const del = await app.request(post(`/investigation/messages/${randomUUID()}/delete`, {}));
+    expect(del.status).toBe(401);
+  });
+
+  it("GET /me flips investigate on for the operator when the feature is enabled", async () => {
+    expect(await (await app.request("/me")).json()).toEqual({ operator: null, investigate: false });
+    expect(await (await app.request("/me", { headers: OPERATOR })).json()).toEqual({
+      operator: "ana",
+      investigate: true,
+    });
+  });
+
+  it("appends attributed turns — the API sets author from token + role, never the body", async () => {
+    const q = await app.request(
+      post(
+        `/exceptions/${exceptionId}/investigation/messages`,
+        { role: "user", text: "where did this charge come from?", authorName: "spoofed" },
+        OPERATOR,
+      ),
+    );
+    expect(q.status).toBe(201);
+    expect((await q.json()) as unknown).toMatchObject({ role: "user", authorName: "ana" });
+
+    const citedRawId = randomUUID();
+    const a = await app.request(
+      post(
+        `/exceptions/${exceptionId}/investigation/messages`,
+        {
+          role: "assistant",
+          text: "It traces to raw pagolat #12.",
+          authorName: "spoofed",
+          model: "claude-sonnet-5",
+          promptVersion: "investigate-v1",
+          citations: [{ kind: "raw", id: citedRawId, label: "raw pagolat #12" }],
+          toolTrail: [{ tool: "get_raw", ref: "raw:1111" }],
+        },
+        OPERATOR,
+      ),
+    );
+    expect(a.status).toBe(201);
+    const aBody = (await a.json()) as { authorName: string; citations: unknown[] };
+    expect(aBody.authorName).toBe("Clara"); // the persona, derived — not from the body
+    expect(aBody.citations).toHaveLength(1);
+
+    const thread = (await (
+      await app.request(`/exceptions/${exceptionId}/investigation`)
+    ).json()) as { threadId: string | null; messages: { authorName: string }[] };
+    expect(thread.threadId).not.toBeNull();
+    expect(thread.messages.map((m) => m.authorName)).toEqual(["ana", "Clara"]);
+  });
+
+  it("budget reports the cap, the enabled flag, and consistent remaining math", async () => {
+    const b = (await (await app.request("/investigate/budget")).json()) as {
+      enabled: boolean;
+      cap: number;
+      usedLast24h: number;
+      remaining: number;
+    };
+    expect(b.enabled).toBe(true);
+    expect(b.cap).toBe(10);
+    expect(b.usedLast24h).toBeGreaterThanOrEqual(1); // the assistant turn appended above
+    expect(b.remaining).toBe(Math.max(0, b.cap - b.usedLast24h));
+  });
+
+  it("delete tombstones a turn — gone from the live view, retained in the record; 404 unknown", async () => {
+    const created = (await (
+      await app.request(
+        post(
+          `/exceptions/${exceptionId}/investigation/messages`,
+          { role: "assistant", text: "a made-up record id" },
+          OPERATOR,
+        ),
+      )
+    ).json()) as { id: string };
+
+    const del = await app.request(
+      post(`/investigation/messages/${created.id}/delete`, { note: "hallucinated" }, OPERATOR),
+    );
+    expect(del.status).toBe(200);
+
+    const after = (await (
+      await app.request(`/exceptions/${exceptionId}/investigation`)
+    ).json()) as { messages: { id: string }[] };
+    expect(after.messages.some((m) => m.id === created.id)).toBe(false);
+
+    expect(
+      (await app.request(post(`/investigation/messages/${randomUUID()}/delete`, {}, OPERATOR)))
+        .status,
+    ).toBe(404);
+  });
+
+  it("404s investigation reads and writes on an unknown or malformed exception", async () => {
+    expect((await app.request(`/exceptions/${randomUUID()}/investigation`)).status).toBe(404);
+    expect((await app.request("/exceptions/not-a-uuid/investigation")).status).toBe(404);
+    expect(
+      (
+        await app.request(
+          post(
+            `/exceptions/${randomUUID()}/investigation/messages`,
+            { role: "user", text: "hi" },
+            OPERATOR,
+          ),
+        )
+      ).status,
+    ).toBe(404);
+  });
+
+  it("reports the feature disabled when it is off, still serving reads", async () => {
+    const offApp = createApp({
+      db: client.db,
+      operatorTokens: parseOperatorTokens("ana:supersecret"),
+      investigate: { enabled: false, dailyCap: 10, assistantName: "Clara" },
+    });
+    expect(((await (await offApp.request("/investigate/budget")).json()) as { enabled: boolean }).enabled).toBe(
+      false,
+    );
+    expect(await (await offApp.request("/me", { headers: OPERATOR })).json()).toEqual({
+      operator: "ana",
+      investigate: false,
+    });
   });
 });
