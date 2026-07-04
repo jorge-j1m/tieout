@@ -10,6 +10,11 @@ import {
   TXN_STATUSES,
 } from "./canonical.js";
 import { TRIAGE_CLASSIFICATIONS, TRIAGE_CONFIDENCES } from "./triage.js";
+import {
+  citationSchema,
+  INVESTIGATION_MESSAGE_ROLES,
+  toolTrailEntrySchema,
+} from "./investigation.js";
 
 /**
  * The API's response boundary. `apps/api` serializes Drizzle rows through a
@@ -334,7 +339,48 @@ export const runDiffSchema = z.object({
   selfResolved: z.array(diffEntrySchema),
 });
 
-export const meSchema = z.object({ operator: z.string().nullable() });
+export const meSchema = z.object({
+  operator: z.string().nullable(),
+  /** Whether live investigation is available to this caller (operator && feature on). */
+  investigate: z.boolean().default(false),
+});
+
+// ── Investigation (D38) ───────────────────────────────────────────────────────
+
+/**
+ * One turn in a case's investigation. `parts` is the AI SDK UIMessage shape
+ * (kept for fidelity); `text` is the flattened body for display. `citations`
+ * are verified — the web links only these. Immutable: the row is never updated.
+ */
+export const investigationMessageSchema = z.object({
+  id: z.string(),
+  role: z.enum(INVESTIGATION_MESSAGE_ROLES),
+  authorName: z.string(),
+  text: z.string(),
+  parts: z.array(z.unknown()),
+  citations: z.array(citationSchema),
+  toolTrail: z.array(toolTrailEntrySchema),
+  model: z.string().nullable(),
+  promptVersion: z.string().nullable(),
+  supersedesId: z.string().nullable(),
+  createdAt: iso,
+});
+
+/** The one shared thread for a case, with its current (non-superseded, non-deleted) turns. */
+export const investigationThreadSchema = z.object({
+  exceptionId: z.string(),
+  /** Null before anyone has asked — the thread is created lazily on the first turn. */
+  threadId: z.string().nullable(),
+  messages: z.array(investigationMessageSchema),
+});
+
+/** The live-spend gate: assistant turns already spent in the last 24h vs the cap. */
+export const investigationBudgetSchema = z.object({
+  enabled: z.boolean(),
+  cap: z.number().int(),
+  usedLast24h: z.number().int(),
+  remaining: z.number().int(),
+});
 
 // ── Inferred types ────────────────────────────────────────────────────────────
 
@@ -361,3 +407,6 @@ export type QuarantineRow = z.infer<typeof quarantineSchema>;
 export type SourceSummary = z.infer<typeof sourceSummarySchema>;
 export type RunDiff = z.infer<typeof runDiffSchema>;
 export type Me = z.infer<typeof meSchema>;
+export type InvestigationMessage = z.infer<typeof investigationMessageSchema>;
+export type InvestigationThread = z.infer<typeof investigationThreadSchema>;
+export type InvestigationBudget = z.infer<typeof investigationBudgetSchema>;
