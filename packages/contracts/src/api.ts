@@ -20,11 +20,14 @@ export const exceptionsQuerySchema = listQuerySchema.extend({
   fingerprint: z.string().optional(),
 });
 
+/** Annotations, not documents — and the demo lends its operator key to the public (D36). */
+const CASE_TEXT_MAX = 500;
+
 export const acknowledgeBodySchema = z.object({
-  note: z.string().min(1).optional(),
+  note: z.string().min(1).max(CASE_TEXT_MAX).optional(),
 });
 
 /** A resolution without a reason is no resolution (D30). */
 export const resolveBodySchema = z.object({
-  reason: z.string().min(1),
+  reason: z.string().min(1).max(CASE_TEXT_MAX),
 });

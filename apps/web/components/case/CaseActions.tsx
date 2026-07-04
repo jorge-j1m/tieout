@@ -87,6 +87,7 @@ function CaseDialog({
             name={isResolve ? "reason" : "note"}
             value={text}
             onChange={(e) => setText(e.target.value)}
+            maxLength={500}
             autoFocus
             placeholder={isResolve ? "e.g. Booked the fee, JE-441" : "Optional note…"}
             className="min-h-[88px] w-full resize-y border border-hair bg-paper p-2.5 text-[13.5px] text-ink outline-none focus:border-ink"

@@ -83,6 +83,9 @@ services:
     environment:
       API_BASE_URL: http://api:3001
       SESSION_COOKIE_SECURE: "true"
+      # The lent visitor key the login page publishes (D36) — "name:token",
+      # and that pair must also be in the api's API_OPERATOR_TOKENS.
+      DEMO_LOGIN_HINT: ${DEMO_LOGIN_HINT:-}
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:

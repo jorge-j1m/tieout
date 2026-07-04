@@ -32,6 +32,18 @@ Universal SSL covers one level only). Add rate limiting on the Cloudflare
 side. Update `TIEOUT_IMAGE`/`TIEOUT_WEB_IMAGE` in `.env` once CI publishes
 images to GHCR — then deploys become `docker compose pull && docker compose up -d`.
 
+To lend the public visitor key (D36), set both in `deploy/.env` — the hint the
+login page publishes and the token the api accepts must be the same pair:
+
+```
+API_OPERATOR_TOKENS=visitor:under-the-double-rule
+DEMO_LOGIN_HINT=visitor:under-the-double-rule
+```
+
+then recreate `api` and `web` (`docker compose --profile public up -d`). Keep
+Cloudflare rate limiting on: that key lets anyone acknowledge/resolve the
+synthetic exceptions (annotations only — no path to financial rows).
+
 ## Seeding the demo data
 
 The image serves; it doesn't seed. There's no Node on the box and Postgres

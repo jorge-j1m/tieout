@@ -274,6 +274,18 @@ describe("api: demo persona reads, operators mutate exceptions", () => {
     expect(worklist).toHaveLength(1); // nothing moved
   });
 
+  it("bounds case text — the demo publishes its operator key, so no essays", async () => {
+    const essay = "x".repeat(501);
+    const longReason = await app.request(
+      post(`/exceptions/${openExceptionId}/resolve`, { reason: essay }, OPERATOR),
+    );
+    expect(longReason.status).toBe(400);
+    const longNote = await app.request(
+      post(`/exceptions/${openExceptionId}/acknowledge`, { note: essay }, OPERATOR),
+    );
+    expect(longNote.status).toBe(400);
+  });
+
   it("walks an operator through acknowledge → resolve with an append-only trail", async () => {
     const noReason = await app.request(post(`/exceptions/${openExceptionId}/resolve`, {}, OPERATOR));
     expect(noReason.status).toBe(400);
