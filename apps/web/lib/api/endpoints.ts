@@ -2,9 +2,12 @@ import "server-only";
 import { cache } from "react";
 import { z } from "zod";
 import {
+  appendInvestigationMessageBodySchema,
   breakSchema,
   exceptionDetailSchema,
   exceptionRowSchema,
+  investigationBudgetSchema,
+  investigationThreadSchema,
   matchWithMembersSchema,
   meSchema,
   quarantineSchema,
@@ -17,7 +20,10 @@ import {
   type BreakType,
   type ExceptionStatus,
 } from "@tieout/contracts";
-import { fetchJson, fetchJsonOrNull } from "./client";
+import { fetchJson, fetchJsonOrNull, postJson } from "./client";
+
+/** What the append endpoint accepts (defaults optional) — the route handler builds this. */
+export type AppendInvestigationMessageBody = z.input<typeof appendInvestigationMessageBodySchema>;
 
 /**
  * One function per API route, each returning contracts-parsed data. Wrapped in
@@ -93,3 +99,34 @@ export const getMe = (token?: string) =>
   fetchJson("/me", meSchema, {
     headers: token !== undefined ? { authorization: `Bearer ${token}` } : {},
   });
+
+// ── Investigation (D38) ───────────────────────────────────────────────────────
+
+/**
+ * The saved conversation for a case — open to every persona. `null` means no
+ * such case (404); an existing case with an empty thread returns `threadId: null`
+ * with no messages. Read by the case page (render) and the streaming route
+ * handler (Clara's context).
+ */
+export const getInvestigation = cache((exceptionId: string) =>
+  fetchJsonOrNull(`/exceptions/${exceptionId}/investigation`, investigationThreadSchema),
+);
+
+/** The live-spend gate — checked before a stream starts. Uncached: it moves every turn. */
+export const getInvestigationBudget = () =>
+  fetchJson("/investigate/budget", investigationBudgetSchema);
+
+/** Append a turn (operator token). The API derives authorship; the body can't spoof it. */
+export const appendInvestigationMessage = (
+  exceptionId: string,
+  body: AppendInvestigationMessageBody,
+  token: string,
+) => postJson(`/exceptions/${exceptionId}/investigation/messages`, body, token);
+
+/** Tombstone a turn (operator token): the row is retained, a `deleted` event appended. */
+export const deleteInvestigationMessage = (messageId: string, token: string, note?: string) =>
+  postJson(
+    `/investigation/messages/${messageId}/delete`,
+    note !== undefined ? { note } : {},
+    token,
+  );

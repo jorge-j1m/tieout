@@ -29,6 +29,6 @@ export async function getSessionToken(): Promise<string | undefined> {
  */
 export const getPersona = cache(async (): Promise<Me> => {
   const token = await getSessionToken();
-  if (token === undefined) return { operator: null };
-  return getMe(token).catch(() => ({ operator: null }));
+  if (token === undefined) return { operator: null, investigate: false };
+  return getMe(token).catch(() => ({ operator: null, investigate: false }));
 });
