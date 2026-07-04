@@ -29,6 +29,13 @@
       "when": 1782991409768,
       "tag": "0003_first_star_brand",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1783195927919,
+      "tag": "0004_silent_bastion",
+      "breakpoints": true
     }
   ]
 }

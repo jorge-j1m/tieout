@@ -10,3 +10,4 @@ export * from "./services/outbox.js";
 export * from "./services/exceptions.js";
 export * from "./services/fx.js";
 export * from "./services/triage.js";
+export * from "./services/investigation.js";

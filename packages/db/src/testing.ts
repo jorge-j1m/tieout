@@ -79,7 +79,8 @@ export async function connectTestDb(): Promise<TestDb> {
 /** Reset every table between tests — the test database holds nothing worth keeping. */
 export async function truncateAll(db: Db): Promise<void> {
   await db.execute(sql`
-    TRUNCATE TABLE triage_suggestions, exception_events, exceptions, outbox, fx_rates,
+    TRUNCATE TABLE investigation_message_events, investigation_messages, investigation_threads,
+      triage_suggestions, exception_events, exceptions, outbox, fx_rates,
       match_members, matches, breaks, recon_runs,
       quarantined_records, transactions, raw_records, ingestion_batches, source_cursors
     CASCADE

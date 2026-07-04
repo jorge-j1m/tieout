@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   bigint,
   bigserial,
   boolean,
@@ -22,6 +23,8 @@ import {
   CANONICAL_TXN_TYPES,
   EXCEPTION_EVENT_KINDS,
   EXCEPTION_STATUSES,
+  INVESTIGATION_EVENT_KINDS,
+  INVESTIGATION_MESSAGE_ROLES,
   MATCH_KINDS,
   OUTBOX_TOPICS,
   QUARANTINE_STAGES,
@@ -51,6 +54,14 @@ export const exceptionEventKind = pgEnum("exception_event_kind", EXCEPTION_EVENT
 export const outboxTopic = pgEnum("outbox_topic", OUTBOX_TOPICS);
 export const triageClassification = pgEnum("triage_classification", TRIAGE_CLASSIFICATIONS);
 export const triageConfidence = pgEnum("triage_confidence", TRIAGE_CONFIDENCES);
+export const investigationMessageRole = pgEnum(
+  "investigation_message_role",
+  INVESTIGATION_MESSAGE_ROLES,
+);
+export const investigationEventKind = pgEnum(
+  "investigation_event_kind",
+  INVESTIGATION_EVENT_KINDS,
+);
 
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 
@@ -404,4 +415,75 @@ export const triageSuggestions = pgTable(
     uniqueIndex("triage_suggestions_input_hash_uq").on(t.inputHash),
     index("triage_suggestions_exception_idx").on(t.exceptionId, t.createdAt),
   ],
+);
+
+/**
+ * Investigate with Claude (D38): the one shared conversation per case. The store
+ * is append-only, the same invariant the financial spine obeys (D8/D30) — a
+ * message row is written once and never UPDATEd or DELETEd. Edits and retries
+ * write a new message that supersedes the old (`supersedesId`); a delete appends
+ * a `deleted` event and leaves the row. The live thread is *derived* from these
+ * tables (services/investigation.ts), never mutated in place, so a future audit
+ * panel can replay the whole history — retracted and hallucinated turns included.
+ */
+export const investigationThreads = pgTable(
+  "investigation_threads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** One thread per case — the unique index is the "single truth" constraint. */
+    exceptionId: uuid("exception_id")
+      .notNull()
+      .references(() => exceptions.id),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("investigation_threads_exception_uq").on(t.exceptionId)],
+);
+
+export const investigationMessages = pgTable(
+  "investigation_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    threadId: uuid("thread_id")
+      .notNull()
+      .references(() => investigationThreads.id),
+    /** Monotonic per thread — ordering that never ties, unlike a millisecond clock. */
+    seq: integer("seq").notNull(),
+    role: investigationMessageRole("role").notNull(),
+    /** The operator's name for a question, the assistant persona (Clara) for an answer. */
+    authorName: text("author_name").notNull(),
+    /** Flattened body for display/search; `parts` holds the AI SDK UIMessage fidelity. */
+    text: text("text").notNull(),
+    parts: jsonb("parts").notNull().default(sql`'[]'::jsonb`),
+    /** Verified citations — the web links only these (records Clara actually retrieved). */
+    citations: jsonb("citations").notNull().default(sql`'[]'::jsonb`),
+    toolTrail: jsonb("tool_trail").notNull().default(sql`'[]'::jsonb`),
+    model: text("model"),
+    promptVersion: text("prompt_version"),
+    usage: jsonb("usage"),
+    /** The message this version replaced (edit/retry); null for an original turn. */
+    supersedesId: uuid("supersedes_id").references((): AnyPgColumn => investigationMessages.id),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("investigation_messages_thread_idx").on(t.threadId, t.seq),
+    // Assistant turns in a window = the live-spend proxy (each is one paid call).
+    index("investigation_messages_role_created_idx").on(t.role, t.createdAt),
+  ],
+);
+
+/** Append-only history of a turn — birth (`created`), replacement, and tombstone. */
+export const investigationMessageEvents = pgTable(
+  "investigation_message_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => investigationMessages.id),
+    kind: investigationEventKind("kind").notNull(),
+    /** The operator who acted (or the persona for a `created` answer). */
+    actor: text("actor").notNull(),
+    note: text("note"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("investigation_message_events_message_idx").on(t.messageId, t.createdAt)],
 );
