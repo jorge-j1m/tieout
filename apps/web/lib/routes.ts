@@ -26,3 +26,26 @@ export const exceptionHref = (id: string): Route => `/exceptions/${id}` as Route
 /** The exceptions worklist, optionally filtered to one status tab. */
 export const exceptionsHref = (status?: string): Route =>
   (status === undefined ? "/exceptions" : `/exceptions?status=${status}`) as Route;
+
+/**
+ * Where a verified citation links (D38). Runs, breaks, and cases have their own
+ * pages; a transaction or raw record is shown inside the evidence chain, so those
+ * marks link to the case's break page when we know it, else render unlinked.
+ */
+export function citationHref(
+  kind: "transaction" | "raw" | "run" | "break" | "exception",
+  id: string,
+  breakId?: string,
+): Route | null {
+  switch (kind) {
+    case "run":
+      return runHref(id);
+    case "break":
+      return breakHref(id);
+    case "exception":
+      return exceptionHref(id);
+    case "transaction":
+    case "raw":
+      return breakId !== undefined ? breakHref(breakId) : null;
+  }
+}

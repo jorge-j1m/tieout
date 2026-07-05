@@ -99,3 +99,107 @@
     animation: ledger-pulse 1.5s ease-in-out infinite;
   }
 }
+
+/*
+ * Clara's streamed prose (D38), rendered by Streamdown into the ledger tokens —
+ * ink body, mono for code and ids, hairline rules. It reads as commentary in the
+ * working paper, never a second type system.
+ */
+.investigate-prose > :first-child {
+  margin-top: 0;
+}
+.investigate-prose > :last-child {
+  margin-bottom: 0;
+}
+.investigate-prose p {
+  margin: 0.5rem 0;
+}
+.investigate-prose ul,
+.investigate-prose ol {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
+}
+.investigate-prose ul {
+  list-style: disc;
+}
+.investigate-prose ol {
+  list-style: decimal;
+}
+.investigate-prose li {
+  margin: 0.15rem 0;
+}
+.investigate-prose strong {
+  font-weight: 600;
+}
+.investigate-prose em {
+  font-style: italic;
+}
+.investigate-prose code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--color-wash);
+  padding: 0.05em 0.3em;
+  border-radius: 2px;
+}
+.investigate-prose pre {
+  margin: 0.6rem 0;
+  overflow-x: auto;
+  border: 1px solid var(--color-hair);
+  border-radius: 2px;
+  padding: 0.7rem 0.85rem;
+}
+.investigate-prose pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.85em;
+}
+.investigate-prose blockquote {
+  margin: 0.5rem 0;
+  border-left: 2px solid var(--color-hair);
+  padding-left: 0.75rem;
+  color: var(--color-muted);
+}
+.investigate-prose h1,
+.investigate-prose h2,
+.investigate-prose h3 {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 1em;
+  font-weight: 600;
+}
+.investigate-prose hr {
+  margin: 0.75rem 0;
+  border: 0;
+  border-top: 1px solid var(--color-hair);
+}
+.investigate-prose table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 0.6rem 0;
+}
+.investigate-prose th,
+.investigate-prose td {
+  border: 1px solid var(--color-hair);
+  padding: 0.25rem 0.5rem;
+  text-align: left;
+}
+
+/* The streaming caret: a quiet blink at the answer's edge; still under reduced-motion. */
+.investigate-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--color-ink);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .investigate-caret {
+    animation: investigate-blink 1s steps(2, start) infinite;
+  }
+}
+@keyframes investigate-blink {
+  50% {
+    opacity: 0;
+  }
+}

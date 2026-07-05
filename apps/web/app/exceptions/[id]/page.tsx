@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { RunContextLine } from "@/components/chrome/RunContextLine";
 import { CaseActions } from "@/components/case/CaseActions";
 import { EventTimeline } from "@/components/case/EventTimeline";
-import { TriageMargin } from "@/components/case/TriageMargin";
+import { InvestigationPanel } from "@/components/case/investigate/InvestigationPanel";
 import { EvidenceSpine } from "@/components/explain/EvidenceSpine";
 import { Money } from "@/components/primitives/Money";
 import { Mono } from "@/components/primitives/Mono";
@@ -53,7 +53,6 @@ export default async function ExceptionCasePage({ params }: { params: Promise<{ 
     brk !== null ? getRun(brk.runId) : Promise.resolve(null),
   ]);
   const raw = transaction !== null ? await getRaw(transaction.rawId) : null;
-  const latestTriage = exception.triageSuggestions[0];
 
   return (
     <>
@@ -129,11 +128,7 @@ export default async function ExceptionCasePage({ params }: { params: Promise<{ 
           </div>
         </section>
 
-        {latestTriage !== undefined && (
-          <section className="mt-11 max-w-md">
-            <TriageMargin suggestion={latestTriage} />
-          </section>
-        )}
+        <InvestigationPanel exception={exception} />
       </Shell>
     </>
   );
