@@ -57,6 +57,13 @@ something a non-engineer can *see*.
    lifecycle; the public demo serves only precomputed suggestions. *(Built:
    `packages/triage`, `triage-exceptions` task + `pnpm --filter @tieout/jobs
    triage` CLI, exposed on `GET /exceptions/:id`.)*
+9. **Investigate with Claude (added mid-stage, D38)** — one shared, streamed,
+   append-only conversation per case: a signed-in operator drives it, Clara
+   answers over the permanent record with verified inline citations, and every
+   turn persists as attributed company knowledge. Suggests, never resolves (no
+   mutation tools); spend is operator-gated + daily-capped + off by default; the
+   LLM key lives only in the web tier. *(Built: `investigation_*` tables, the api
+   thread/budget endpoints, the web streaming route handler + panel.)*
 
 ## Out of scope (resist)
 
@@ -88,6 +95,14 @@ explains, it never edits the books (the product's first promise).
 - [ ] Alert fires on a seeded threshold breach; the delivery is recorded.
 - [ ] Quickstart still ≤5 minutes; zero-infra tests still green; the web/api apps get
       one end-to-end smoke (demo persona path) in CI.
+- [x] An operator holds a streamed investigation on a case; Clara cites real records
+      as verified links; every turn is attributed and persisted; delete tombstones
+      (the row stays for audit); the demo persona is rejected server-side. *(D38:
+      append-only `investigation_*` store proven in db + api tests — derived live
+      view excludes superseded/deleted, demo 401 on every write, budget counts 24h
+      assistant turns; the web planner, tools, and citation guard are unit-tested;
+      streaming leans on the AI SDK, not re-tested. Manual live smoke pending on the
+      box with the real key.)*
 
 ## Suggested build order
 

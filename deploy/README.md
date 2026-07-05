@@ -72,10 +72,35 @@ docker run --rm \
 ```
 
 `pnpm seed` / `pnpm recon` need no network access (D25 — the demo sources are
-committed fixture files), so this never touches MinIO or the internet. The
-public site then serves stored suggestions only — zero live LLM calls, no
-`TIEOUT_TRIAGE_API_KEY` anywhere in the stack's persistent environment.
-Re-running is idempotent: `recon` re-derives the same run deterministically,
-and `triage` skips any break whose content hasn't changed (cached per
-`input_hash`, which includes the model — switching `TIEOUT_TRIAGE_MODEL`
-re-triages everything under the new model instead of reusing the cache).
+committed fixture files), so this never touches MinIO or the internet. With
+live investigation off (the default), the public site serves stored suggestions
+only — zero live LLM calls, no `TIEOUT_TRIAGE_API_KEY` anywhere in the stack's
+persistent environment. Re-running is idempotent: `recon` re-derives the same
+run deterministically, and `triage` skips any break whose content hasn't changed
+(cached per `input_hash`, which includes the model — switching
+`TIEOUT_TRIAGE_MODEL` re-triages everything under the new model instead of
+reusing the cache).
+
+## Live investigation (D38 — optional, off by default)
+
+Turning on "Investigate with Claude" lets a signed-in operator drive a streamed,
+cited conversation on a case. Unlike batch triage above, this makes **live** LLM
+calls from the long-running `web` container, so — and only then — the key enters
+the stack's persistent environment (the `api` never gets it). Enable it in
+`deploy/.env`:
+
+```
+TIEOUT_INVESTIGATE_ENABLED=true
+TIEOUT_TRIAGE_API_KEY=sk-ant-...          # the web tier reads this to stream
+TIEOUT_TRIAGE_BASE_URL=https://api.anthropic.com/v1
+TIEOUT_INVESTIGATE_MODEL=claude-sonnet-5  # ~$0.05–0.08/turn
+TIEOUT_INVESTIGATE_DAILY_CAP=10           # assistant turns / 24h; a maxed day ≈ $0.80
+```
+
+then recreate the stack (`docker compose --profile public up -d`). Spend is
+bounded four ways: only a signed-in operator can stream (rotate
+`API_OPERATOR_TOKENS` to revoke the lent `visitor` key), the daily cap, a
+per-turn tool-round limit, and a prepaid key with no auto-reload. Keep Cloudflare
+rate limiting on. To seed the demo with a real saved thread, log in as `visitor`
+after a reseed and run one investigation on a planted break — anonymous visitors
+then land on a real, cited conversation (read-only, zero live calls for them).

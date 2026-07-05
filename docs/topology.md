@@ -79,11 +79,15 @@ API_OPERATOR_TOKENS=                # named operator bearer tokens "ana:t1,leo:t
 API_PORT=3001                       # apps/api listen port
 API_BASE_URL=http://127.0.0.1:3001  # apps/web → apps/api base URL (D34)
 SESSION_COOKIE_SECURE=              # =true forces the operator session cookie's Secure flag (behind https); default: on in production (D36)
-TIEOUT_TRIAGE_ENABLED=              # =true turns on LLM triage (D33); off = zero LLM calls anywhere
-TIEOUT_TRIAGE_API_KEY=              # triage only; never in the app-stack containers
+TIEOUT_TRIAGE_ENABLED=              # =true turns on LLM triage (D33); off = zero batch LLM calls
+TIEOUT_TRIAGE_API_KEY=              # batch triage precompute; also read by the web tier when live investigation is on (D38)
 TIEOUT_TRIAGE_BASE_URL=             # any OpenAI-compatible /v1 root; default is Anthropic's compat endpoint
 TIEOUT_TRIAGE_MODEL=claude-opus-4-8 # triage model on that provider (claude-haiku-4-5 = the cheap option)
 TIEOUT_TRIAGE_MAX_CALLS=25          # hard LLM-call cap per triage pass
+TIEOUT_INVESTIGATE_ENABLED=         # =true turns on live "Investigate with Claude" (D38) in the web tier; off = no live calls
+TIEOUT_INVESTIGATE_MODEL=claude-sonnet-5      # investigation model (~$0.05–0.08/turn)
+TIEOUT_INVESTIGATE_ASSISTANT_NAME=Clara       # the assistant persona shown on answers
+TIEOUT_INVESTIGATE_DAILY_CAP=10               # assistant turns / 24h before 429 (a maxed day ≈ $0.80)
 ```
 
 ## Exposure rules (all stages)
@@ -96,7 +100,7 @@ TIEOUT_TRIAGE_MAX_CALLS=25          # hard LLM-call cap per triage pass
 
 Separate compose projects with separate networks and separate Postgres instances, so the orchestrator can be rebuilt without touching financial data:
 
-1. **App stack** (`tieout-app`) — **built, in `deploy/docker-compose.yml`**: `postgres`; `minio`; a one-shot `migrate` service gating app start (`depends_on: condition: service_completed_successfully`); `api` (Hono, localhost-bound, Docker healthcheck on `/healthz`); `web` (Next.js standalone from `Dockerfile.web`, localhost-bound `:3000`, reads the api over the stack network via `API_BASE_URL=http://api:3001`); `cloudflared` under the `public` profile — one outbound tunnel routing `tieout.jorgejim.com → web:3000` and `tieout-api.jorgejim.com → api:3001` (D37). One image for api and migrate, built from the root `Dockerfile` (prod deps only, api+db workspace slice); runbook in `deploy/README.md`. `TIEOUT_TRIAGE_API_KEY` is deliberately absent from this stack — the demo serves precomputed triage suggestions only (D33).
+1. **App stack** (`tieout-app`) — **built, in `deploy/docker-compose.yml`**: `postgres`; `minio`; a one-shot `migrate` service gating app start (`depends_on: condition: service_completed_successfully`); `api` (Hono, localhost-bound, Docker healthcheck on `/healthz`); `web` (Next.js standalone from `Dockerfile.web`, localhost-bound `:3000`, reads the api over the stack network via `API_BASE_URL=http://api:3001`); `cloudflared` under the `public` profile — one outbound tunnel routing `tieout.jorgejim.com → web:3000` and `tieout-api.jorgejim.com → api:3001` (D37). One image for api and migrate, built from the root `Dockerfile` (prod deps only, api+db workspace slice); runbook in `deploy/README.md`. Batch triage precompute keeps `TIEOUT_TRIAGE_API_KEY` out of the stack (the demo serves precomputed suggestions, D33) — but enabling live investigation (D38) puts that key in the `web` container's persistent environment, since the streaming route handler runs there; the `api` never receives it either way.
 2. **Trigger stack** (`trigger`): the official self-host compose — webapp, supervisor, its own Postgres/Redis/ClickHouse, registry — **only if Stage 4 is delayed**; the plan of record is to stay on Trigger.dev Cloud until k3s.
 
 Deploys: GitHub Actions builds images → GHCR → SSH to the box → `docker compose pull && docker compose up -d` (until CI exists, `--build` on the box does the same job).

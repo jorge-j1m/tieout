@@ -60,6 +60,11 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-tieout}:${POSTGRES_PASSWORD:?set in deploy/.env}@postgres:5432/${POSTGRES_DB:-tieout}
       API_OPERATOR_TOKENS: ${API_OPERATOR_TOKENS:-}
       API_PORT: "3001"
+      # Investigate gate only (D38): the /me flag, the budget cap, the persona name.
+      # The LLM key lives in `web`, never here.
+      TIEOUT_INVESTIGATE_ENABLED: ${TIEOUT_INVESTIGATE_ENABLED:-}
+      TIEOUT_INVESTIGATE_DAILY_CAP: ${TIEOUT_INVESTIGATE_DAILY_CAP:-10}
+      TIEOUT_INVESTIGATE_ASSISTANT_NAME: ${TIEOUT_INVESTIGATE_ASSISTANT_NAME:-Clara}
     ports:
       - "127.0.0.1:3001:3001"
     depends_on:
@@ -86,6 +91,14 @@ services:
       # The lent visitor key the login page publishes (D36) — "name:token",
       # and that pair must also be in the api's API_OPERATOR_TOKENS.
       DEMO_LOGIN_HINT: ${DEMO_LOGIN_HINT:-}
+      # Live investigation (D38) runs here — the route handler streams from the
+      # provider, so the LLM key lives in this container and nowhere else.
+      TIEOUT_INVESTIGATE_ENABLED: ${TIEOUT_INVESTIGATE_ENABLED:-}
+      TIEOUT_INVESTIGATE_MODEL: ${TIEOUT_INVESTIGATE_MODEL:-claude-sonnet-5}
+      TIEOUT_INVESTIGATE_ASSISTANT_NAME: ${TIEOUT_INVESTIGATE_ASSISTANT_NAME:-Clara}
+      TIEOUT_INVESTIGATE_DAILY_CAP: ${TIEOUT_INVESTIGATE_DAILY_CAP:-10}
+      TIEOUT_TRIAGE_API_KEY: ${TIEOUT_TRIAGE_API_KEY:-}
+      TIEOUT_TRIAGE_BASE_URL: ${TIEOUT_TRIAGE_BASE_URL:-https://api.anthropic.com/v1}
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
